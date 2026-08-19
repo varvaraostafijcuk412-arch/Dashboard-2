@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Дашборд АО «Якутский хлебокомбинат»</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#f2f2f5;
@@ -141,10 +139,14 @@
   <div class="skeleton">Загружаем данные…</div>
 </main>
 
+<script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" defer></script>
+
 <script>
+document.addEventListener('DOMContentLoaded', function () {
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4-wbK65kqiOmVJw-UDyZJVHm5biB56_a-DmtxIJfc1MNPWXw1N7-AxbcSIcRJGJY/exec';
 
-  const tg = window.Telegram ? window.Telegram.WebApp : null;
+  const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
   if (tg) { tg.ready(); tg.expand(); }
 
   const TABS = [
@@ -322,6 +324,10 @@
   function drawHrChart(weekly) {
     const el = document.getElementById('hrChart');
     if (!el || !weekly || !weekly.length) return;
+    if (typeof Chart === 'undefined') {
+      el.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      return;
+    }
     new Chart(el, {
       type: 'line',
       data: {
@@ -388,6 +394,10 @@
     const el = document.getElementById('breadChart');
     if (el && !el.dataset.drawn && DATA && DATA.bread && DATA.bread.groups) {
       el.dataset.drawn = '1';
+      if (typeof Chart === 'undefined') {
+        el.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+        return;
+      }
       new Chart(el, {
         type: 'bar',
         data: {
@@ -413,6 +423,7 @@
   observer.observe(document.getElementById('main'), { childList:true, subtree:true });
 
   load();
+});
 </script>
 </body>
 </html>
