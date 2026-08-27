@@ -7,6 +7,7 @@
 <title>Дашборд АО «Якутский хлебокомбинат»</title>
 <style>
   :root{
+    color-scheme: light only;
     --bg:#f2f2f5;
     --card:#ffffff;
     --ink:#17181c;
@@ -20,14 +21,11 @@
     --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;height:100%;}
-  html{background:#f2f2f5;}
+  html{ background:var(--bg); color-scheme: light only; }
+  html,body{margin:0;padding:0;}
   body{
-    min-height:100vh;
-    background:#f2f2f5;
-    background:var(--bg,#f2f2f5);
-    color:#17181c;
-    color:var(--ink,#17181c);
+    background:var(--bg);
+    color:var(--ink);
     font-family:var(--font-body);
     -webkit-font-smoothing:antialiased;
     padding-bottom:36px;
@@ -155,10 +153,12 @@ document.addEventListener('DOMContentLoaded', function () {
   if (tg) {
     tg.ready();
     tg.expand();
+    // Принудительно светлая тема дашборда, независимо от темы клиента Telegram
     try {
-      tg.setHeaderColor('#f2f2f5');
-      tg.setBackgroundColor('#f2f2f5');
-    } catch (e) { /* старые клиенты Telegram могут не поддерживать эти методы — не критично */ }
+      if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor('#f2f2f5');
+      if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor('#f2f2f5');
+      if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor('#f2f2f5');
+    } catch (e) { /* старая версия клиента без этих методов — не критично */ }
   }
  
   const TABS = [
