@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light only">
 <title>Дашборд АО «Якутский хлебокомбинат»</title>
 <style>
   :root{
@@ -19,22 +20,26 @@
     --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
+  html,body{margin:0;padding:0;height:100%;}
+  html{background:#f2f2f5;}
   body{
-    background:var(--bg);
-    color:var(--ink);
+    min-height:100vh;
+    background:#f2f2f5;
+    background:var(--bg,#f2f2f5);
+    color:#17181c;
+    color:var(--ink,#17181c);
     font-family:var(--font-body);
     -webkit-font-smoothing:antialiased;
     padding-bottom:36px;
   }
-
+ 
   header{ padding:20px 18px 14px; }
   h1{
     font-family:var(--font-display); font-weight:800; font-size:23px;
     margin:0 0 4px; line-height:1.2; letter-spacing:-0.01em;
   }
   .date{ font-size:13px; color:var(--dim); margin:0; }
-
+ 
   .tabs{
     display:flex; gap:4px; margin:16px 16px 18px;
     background:#e6e7eb; border-radius:14px; padding:4px;
@@ -47,17 +52,17 @@
     white-space:nowrap; cursor:pointer; transition:.15s;
   }
   .tab.active{ background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-
+ 
   main{ padding:0 16px; }
   .screen{ display:none; }
   .screen.active{ display:block; }
-
+ 
   .card{
     background:var(--card); border-radius:16px;
     padding:16px 16px 14px; margin-bottom:12px;
     box-shadow:0 1px 2px rgba(20,20,30,0.04);
   }
-
+ 
   .kpi-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
   .kpi{ background:var(--card); border-radius:16px; padding:14px 14px 12px; box-shadow:0 1px 2px rgba(20,20,30,0.04); cursor:pointer; transition:.15s; }
   .kpi:active{ background:#fafafa; }
@@ -79,9 +84,9 @@
   .badge.bad{ background:var(--bad-bg); color:var(--bad-fg); }
   .badge.nodata{ background:var(--nodata-bg); color:var(--nodata-fg); }
   .kpi-note{ font-size:12px; color:var(--dim); }
-
+ 
   .section-title{ font-size:13px; color:var(--dim); margin:0 0 12px; font-weight:600; }
-
+ 
   .row{
     display:flex; align-items:center; gap:10px;
     padding:9px 0; border-bottom:1px solid var(--line);
@@ -91,13 +96,13 @@
   .bar-track{ width:100px; height:7px; background:#eef0f2; border-radius:5px; overflow:hidden; }
   .bar-fill{ height:100%; border-radius:5px; background:linear-gradient(90deg,#34c268,#22a854); }
   .row-value{ width:52px; text-align:right; font-size:13.5px; font-weight:700; font-variant-numeric:tabular-nums; }
-
+ 
   .extra-row{ display:flex; justify-content:space-between; align-items:baseline; padding:10px 0; border-bottom:1px solid var(--line); }
   .extra-row:last-child{ border-bottom:none; }
   .extra-label{ font-size:13px; color:var(--dim); }
   .extra-nums b{ font-family:var(--font-display); font-size:16px; font-weight:800; }
   .extra-nums span{ color:var(--dim); font-size:11.5px; margin-left:5px; }
-
+ 
   table.groups{ width:100%; border-collapse:collapse; font-size:12.5px; }
   table.groups th{ text-align:left; color:var(--dim); font-weight:600; font-size:11px; padding:0 6px 8px 0; }
   table.groups td{ padding:8px 6px 8px 0; border-top:1px solid var(--line); }
@@ -106,7 +111,7 @@
   .pct-bad{ color:var(--bad-fg); font-weight:700; }
   .chart-wrap{ position:relative; width:100%; height:190px; }
   .chart-wrap canvas{ width:100% !important; height:100% !important; }
-
+ 
   .summary-card{
     background:var(--card); border-radius:16px; padding:16px; margin-bottom:12px;
     box-shadow:0 1px 2px rgba(20,20,30,0.04); cursor:pointer;
@@ -117,50 +122,57 @@
   .summary-metric{ flex:1; }
   .summary-metric .label{ font-size:12px; color:var(--dim); margin-bottom:4px; }
   .summary-metric .value{ font-family:var(--font-display); font-weight:800; font-size:22px; margin-bottom:6px; }
-
+ 
   .empty-dept{
     text-align:center; color:var(--dim); font-size:13px; padding:30px 20px;
   }
-
+ 
   .updated{ text-align:center; font-size:11px; color:var(--dim); padding:10px 0 0; }
   .skeleton, .err{ text-align:center; color:var(--dim); font-size:13px; padding:60px 20px; }
 </style>
 </head>
 <body>
-
+ 
 <header>
   <h1>Дашборд АО «Якутский хлебокомбинат»</h1>
   <p class="date" id="dateLine">—</p>
 </header>
-
+ 
 <div class="tabs" id="tabs"></div>
-
+ 
 <main id="main">
   <div class="skeleton">Загружаем данные…</div>
 </main>
-
+ 
 <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" defer></script>
-
+ 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4-wbK65kqiOmVJw-UDyZJVHm5biB56_a-DmtxIJfc1MNPWXw1N7-AxbcSIcRJGJY/exec';
-
+ 
   const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
-  if (tg) { tg.ready(); tg.expand(); }
-
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    try {
+      tg.setHeaderColor('#f2f2f5');
+      tg.setBackgroundColor('#f2f2f5');
+    } catch (e) { /* старые клиенты Telegram могут не поддерживать эти методы — не критично */ }
+  }
+ 
   const TABS = [
     { key: 'summary', label: 'Сводка' },
     { key: 'hr', label: 'Отдел кадров' },
     { key: 'bread', label: 'Хлебный цех' }
   ];
-
+ 
   let DATA = null;
-
+ 
   function fmtDate(d) {
     return new Intl.DateTimeFormat('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' }).format(d);
   }
-
+ 
   async function load() {
     document.getElementById('dateLine').textContent = 'на ' + fmtDate(new Date());
     try {
@@ -174,7 +186,7 @@ document.addEventListener('DOMContentLoaded', function () {
         `<div class="err">Не удалось загрузить данные.<br>${err.message}<br><br>Проверь APPS_SCRIPT_URL и доступ веб-приложения ("Anyone").</div>`;
     }
   }
-
+ 
   function buildTabs() {
     const tabsEl = document.getElementById('tabs');
     tabsEl.innerHTML = TABS.map((t, i) =>
@@ -188,14 +200,14 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   }
-
+ 
   function renderTab(key) {
     const main = document.getElementById('main');
     if (key === 'summary') { main.innerHTML = renderSummary(); attachSummaryNav(); return; }
     if (key === 'hr') { main.innerHTML = renderHR(DATA.hr); if (DATA.hr && !DATA.hr.error) drawHrChart(DATA.hr.weekly); return; }
     if (key === 'bread') { main.innerHTML = renderBread(DATA.bread); return; }
   }
-
+ 
   function goTab(key) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.key === key));
     renderTab(key);
@@ -205,10 +217,10 @@ document.addEventListener('DOMContentLoaded', function () {
       el.addEventListener('click', () => goTab(el.dataset.goto));
     });
   }
-
+ 
   function renderSummary() {
     let html = '';
-
+ 
     if (DATA.hr && !DATA.hr.error) {
       const turnover = DATA.hr.kpis[0];
       const staffed = DATA.hr.kpis[1];
@@ -228,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function () {
           </div>
         </div>`;
     }
-
+ 
     if (DATA.bread && !DATA.bread.error) {
       const fulfill = DATA.bread.kpis[0];
       const defect = DATA.bread.kpis[1];
@@ -249,10 +261,10 @@ document.addEventListener('DOMContentLoaded', function () {
           </div>
         </div>`;
     }
-
+ 
     return html || '<div class="empty-dept">Нет данных</div>';
   }
-
+ 
   function badgeHtml(kpi) {
     if (!kpi) return '';
     if (kpi.status === 'nodata' || /нет данных/i.test(kpi.value || '')) {
@@ -262,7 +274,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (kpi.status === 'bad') return `<span class="badge bad">${kpi.badge || 'выше плана'}</span>`;
     return '';
   }
-
+ 
   function kpiDetail(kpi) {
     if (!kpi) return '';
     if (kpi.status === 'good') return 'Показатель в пределах нормы.';
@@ -272,10 +284,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     return kpi.note ? `Ориентир: ${kpi.note}` : 'Дополнительных данных пока нет.';
   }
-
+ 
   function renderHR(hr) {
     if (!hr || hr.error) return `<div class="empty-dept">Таблица отдела кадров недоступна</div>`;
-
+ 
     const kpiCards = hr.kpis.map(k => `
       <div class="kpi" onclick="this.classList.toggle('open')">
         <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
@@ -284,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="kpi-detail">${kpiDetail(k)}</div>
       </div>
     `).join('');
-
+ 
     const maxDept = Math.max(...hr.departments.map(d => d.value), 1);
     const deptRows = hr.departments.map(d => `
       <div class="row">
@@ -293,34 +305,34 @@ document.addEventListener('DOMContentLoaded', function () {
         <span class="row-value">${d.value}%</span>
       </div>
     `).join('');
-
+ 
     const extraRows = (hr.extra || []).map(e => `
       <div class="extra-row">
         <span class="extra-label">${e.label}</span>
         <span class="extra-nums"><b>${e.current}</b><span>АППГ ${e.appg}</span></span>
       </div>
     `).join('');
-
+ 
     return `
       <div class="kpi-grid">${kpiCards}</div>
-
+ 
       <div class="card">
         <p class="section-title">Динамика текучести по неделям</p>
         <div class="chart-wrap"><canvas id="hrChart"></canvas></div>
       </div>
-
+ 
       <div class="card">
         <p class="section-title">Укомплектованность по подразделениям</p>
         ${deptRows}
       </div>
-
+ 
       <div class="card">
         <p class="section-title">Дополнительно</p>
         ${extraRows}
       </div>
     `;
   }
-
+ 
   function drawHrChart(weekly) {
     const el = document.getElementById('hrChart');
     if (!el || !weekly || !weekly.length) return;
@@ -349,10 +361,10 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
   }
-
+ 
   function renderBread(bread) {
     if (!bread || bread.error) return `<div class="empty-dept">Таблица хлебного цеха недоступна</div>`;
-
+ 
     const kpiCards = bread.kpis.map(k => `
       <div class="kpi" onclick="this.classList.toggle('open')">
         <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
@@ -361,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="kpi-detail">${kpiDetail(k)}</div>
       </div>
     `).join('');
-
+ 
     const groupRows = (bread.groups || []).map(g => `
       <tr>
         <td>${g.name}</td>
@@ -370,11 +382,11 @@ document.addEventListener('DOMContentLoaded', function () {
         <td class="num ${g.pctValue>=100?'pct-good':'pct-bad'}">${g.pctLabel}</td>
       </tr>
     `).join('');
-
+ 
     return `
       ${bread.period ? `<p class="date" style="margin:-4px 0 12px">Отчётная неделя: ${bread.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
-
+ 
       <div class="card">
         <p class="section-title">Выполнение заявок по группам изделий</p>
         <table class="groups">
@@ -382,14 +394,14 @@ document.addEventListener('DOMContentLoaded', function () {
           <tbody>${groupRows}</tbody>
         </table>
       </div>
-
+ 
       <div class="card">
         <p class="section-title">% выполнения заявок по группам</p>
         <div class="chart-wrap"><canvas id="breadChart"></canvas></div>
       </div>
     `;
   }
-
+ 
   const observer = new MutationObserver(() => {
     const el = document.getElementById('breadChart');
     if (el && !el.dataset.drawn && DATA && DATA.bread && DATA.bread.groups) {
@@ -421,7 +433,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
   observer.observe(document.getElementById('main'), { childList:true, subtree:true });
-
+ 
   load();
 });
 </script>
