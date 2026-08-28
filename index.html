@@ -314,6 +314,7 @@ document.addEventListener('DOMContentLoaded', function () {
     `).join('');
  
     return `
+      ${hr.period ? `<p class="date" style="margin:-4px 0 12px">${hr.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
  
       <div class="card">
