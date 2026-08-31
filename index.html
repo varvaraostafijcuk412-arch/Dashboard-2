@@ -164,7 +164,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const TABS = [
     { key: 'summary', label: 'Сводка' },
     { key: 'hr', label: 'Отдел кадров' },
-    { key: 'bread', label: 'Хлебный цех' }
+    { key: 'bread', label: 'Хлебный цех' },
+    { key: 'omts', label: 'ОМТС' }
   ];
  
   let DATA = null;
@@ -206,6 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'summary') { main.innerHTML = renderSummary(); attachSummaryNav(); return; }
     if (key === 'hr') { main.innerHTML = renderHR(DATA.hr); if (DATA.hr && !DATA.hr.error) drawHrChart(DATA.hr.weekly); return; }
     if (key === 'bread') { main.innerHTML = renderBread(DATA.bread); return; }
+    if (key === 'omts') { main.innerHTML = renderOMTS(DATA.omts); return; }
   }
  
   function goTab(key) {
@@ -262,6 +264,25 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>`;
     }
  
+    if (DATA.omts && !DATA.omts.error) {
+      const total = DATA.omts.kpis[0];
+      const deficit = DATA.omts.kpis[1];
+      html += `
+        <div class="summary-card" data-goto="omts">
+          <div class="summary-top">${DATA.omts.icon} ${DATA.omts.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${total.label}</div>
+              <div class="value">${total.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${deficit.label}</div>
+              <div class="value">${deficit.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
     return html || '<div class="empty-dept">Нет данных</div>';
   }
  
@@ -403,6 +424,24 @@ document.addEventListener('DOMContentLoaded', function () {
     `;
   }
  
+  function renderOMTS(omts) {
+    if (!omts || omts.error) return `<div class="empty-dept">Таблица ОМТС недоступна</div>`;
+
+    const kpiCards = omts.kpis.map(k => `
+      <div class="kpi" onclick="this.classList.toggle('open')">
+        <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
+        <div class="kpi-value">${k.value}</div>
+        ${badgeHtml(k)}
+        <div class="kpi-detail">${kpiDetail(k)}</div>
+      </div>
+    `).join('');
+
+    return `
+      ${omts.period ? `<p class="date" style="margin:-4px 0 12px">${omts.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+    `;
+  }
+
   const observer = new MutationObserver(() => {
     const el = document.getElementById('breadChart');
     if (el && !el.dataset.drawn && DATA && DATA.bread && DATA.bread.groups) {
