@@ -171,7 +171,8 @@ document.addEventListener('DOMContentLoaded', function () {
     { key: 'summary', label: 'Сводка' },
     { key: 'hr', label: 'Отдел кадров' },
     { key: 'bread', label: 'Хлебный цех' },
-    { key: 'omts', label: 'ОМТС' }
+    { key: 'omts', label: 'ОМТС' },
+    { key: 'marketing', label: 'Маркетинг' }
   ];
  
   let DATA = null;
@@ -214,6 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'hr') { main.innerHTML = renderHR(DATA.hr); if (DATA.hr && !DATA.hr.error) drawHrChart(DATA.hr.weekly); return; }
     if (key === 'bread') { main.innerHTML = renderBread(DATA.bread); return; }
     if (key === 'omts') { main.innerHTML = renderOMTS(DATA.omts); if (DATA.omts && !DATA.omts.error) drawOmtsCharts(DATA.omts); return; }
+    if (key === 'marketing') { main.innerHTML = renderMarketing(DATA.marketing); return; }
   }
  
   function goTab(key) {
@@ -284,6 +286,25 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="summary-metric">
               <div class="label">${deficit.label}</div>
               <div class="value">${deficit.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if (DATA.marketing && !DATA.marketing.error) {
+      const retail = DATA.marketing.kpis[0];
+      const conv = DATA.marketing.kpis[2];
+      html += `
+        <div class="summary-card" data-goto="marketing">
+          <div class="summary-top">${DATA.marketing.icon} ${DATA.marketing.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${retail.label}</div>
+              <div class="value">${retail.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${conv.label}</div>
+              <div class="value">${conv.value}</div>
             </div>
           </div>
         </div>`;
@@ -548,6 +569,24 @@ document.addEventListener('DOMContentLoaded', function () {
         });
       }
     }
+  }
+
+  function renderMarketing(mkt) {
+    if (!mkt || mkt.error) return `<div class="empty-dept">Таблица маркетинга недоступна</div>`;
+
+    const kpiCards = mkt.kpis.map(k => `
+      <div class="kpi" onclick="this.classList.toggle('open')">
+        <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
+        <div class="kpi-value">${k.value}</div>
+        ${badgeHtml(k)}
+        <div class="kpi-detail">${kpiDetail(k)}</div>
+      </div>
+    `).join('');
+
+    return `
+      ${mkt.period ? `<p class="date" style="margin:-4px 0 12px">${mkt.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+    `;
   }
 
   const observer = new MutationObserver(() => {
