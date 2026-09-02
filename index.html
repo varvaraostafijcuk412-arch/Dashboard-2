@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'hr') { main.innerHTML = renderHR(DATA.hr); if (DATA.hr && !DATA.hr.error) drawHrChart(DATA.hr.weekly); return; }
     if (key === 'bread') { main.innerHTML = renderBread(DATA.bread); return; }
     if (key === 'omts') { main.innerHTML = renderOMTS(DATA.omts); if (DATA.omts && !DATA.omts.error) drawOmtsCharts(DATA.omts); return; }
-    if (key === 'marketing') { main.innerHTML = renderMarketing(DATA.marketing); return; }
+    if (key === 'marketing') { main.innerHTML = renderMarketing(DATA.marketing); if (DATA.marketing && !DATA.marketing.error) drawMarketingCharts(DATA.marketing); return; }
   }
  
   function goTab(key) {
@@ -586,7 +586,144 @@ document.addEventListener('DOMContentLoaded', function () {
     return `
       ${mkt.period ? `<p class="date" style="margin:-4px 0 12px">${mkt.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
+
+      <div class="card">
+        <p class="section-title">Конверсия по магазинам, %</p>
+        <div class="chart-wrap"><canvas id="mktConversionChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Батон нарезной — топ каналов, откл. шт</p>
+        <div class="chart-wrap" style="height:280px"><canvas id="mktBreadTopChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Ретейли — изменение показателей за неделю, %</p>
+        <div class="chart-wrap"><canvas id="mktRetailChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Новинки — доля рынка, %</p>
+        <div class="chart-wrap"><canvas id="mktNoveltiesChart"></canvas></div>
+      </div>
     `;
+  }
+
+  function drawMarketingCharts(mkt) {
+    const convEl = document.getElementById('mktConversionChart');
+    if (convEl && mkt.conversionChart && mkt.conversionChart.shops && mkt.conversionChart.shops.length) {
+      if (typeof Chart === 'undefined') {
+        convEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      } else {
+        const cc = mkt.conversionChart;
+        new Chart(convEl, {
+          type: 'bar',
+          data: {
+            labels: cc.shops.map(s => s.name),
+            datasets: [
+              { label: cc.weekLabels[0], data: cc.shops.map(s => s.week1), backgroundColor: '#c7c9cf', borderRadius: 4 },
+              { label: cc.weekLabels[1], data: cc.shops.map(s => s.week2), backgroundColor: '#3a6df0', borderRadius: 4 }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      }
+    }
+
+    const topEl = document.getElementById('mktBreadTopChart');
+    if (topEl && mkt.breadTopChart) {
+      const combined = (mkt.breadTopChart.growth || []).concat(mkt.breadTopChart.decline || []);
+      if (combined.length) {
+        if (typeof Chart === 'undefined') {
+          topEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+        } else {
+          new Chart(topEl, {
+            type: 'bar',
+            data: {
+              labels: combined.map(c => c.name),
+              datasets: [{
+                data: combined.map(c => c.value),
+                backgroundColor: combined.map(c => c.value >= 0 ? '#22a854' : '#d24b3a'),
+                borderRadius: 4
+              }]
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
+                y: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } }
+              }
+            }
+          });
+        }
+      }
+    }
+
+    const retailEl = document.getElementById('mktRetailChart');
+    if (retailEl && mkt.retailChangeChart && mkt.retailChangeChart.length) {
+      if (typeof Chart === 'undefined') {
+        retailEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      } else {
+        new Chart(retailEl, {
+          type: 'bar',
+          data: {
+            labels: mkt.retailChangeChart.map(c => c.name),
+            datasets: [{
+              data: mkt.retailChangeChart.map(c => c.pct),
+              backgroundColor: mkt.retailChangeChart.map(c => c.pct >= 0 ? '#22a854' : '#d24b3a'),
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      }
+    }
+
+    const novEl = document.getElementById('mktNoveltiesChart');
+    if (novEl && mkt.noveltiesChart && mkt.noveltiesChart.length) {
+      if (typeof Chart === 'undefined') {
+        novEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      } else {
+        new Chart(novEl, {
+          type: 'bar',
+          data: {
+            labels: mkt.noveltiesChart.map(c => c.name),
+            datasets: [
+              { label: 'Пред. неделя', data: mkt.noveltiesChart.map(c => c.share1), backgroundColor: '#c7c9cf', borderRadius: 4 },
+              { label: 'Текущая неделя', data: mkt.noveltiesChart.map(c => c.share2), backgroundColor: '#3a6df0', borderRadius: 4 }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      }
+    }
   }
 
   const observer = new MutationObserver(() => {
