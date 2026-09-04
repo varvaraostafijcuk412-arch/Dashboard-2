@@ -360,6 +360,23 @@ document.addEventListener('DOMContentLoaded', function () {
         <span class="extra-nums"><b>${e.current}</b><span>АППГ ${e.appg}</span></span>
       </div>
     `).join('');
+
+    const maxTurnover = Math.max(...(hr.deptTurnover || []).map(d => d.value), 1);
+    const turnoverRows = (hr.deptTurnover || []).map(d => `
+      <div class="row">
+        <span class="row-name">${d.name}</span>
+        <span class="bar-track"><span class="bar-fill" style="width:${(d.value/maxTurnover*100).toFixed(0)}%"></span></span>
+        <span class="row-value">${d.value}%</span>
+      </div>
+    `).join('');
+
+    const reasonRows = (hr.terminationReasons || []).map(r => `
+      <tr>
+        <td>${r.reason}</td>
+        <td class="num">${r.count}</td>
+        <td class="num">${r.pct}%</td>
+      </tr>
+    `).join('');
  
     return `
       ${hr.period ? `<p class="date" style="margin:-4px 0 12px">${hr.period}</p>` : ''}
@@ -378,6 +395,20 @@ document.addEventListener('DOMContentLoaded', function () {
       <div class="card">
         <p class="section-title">Дополнительно</p>
         ${extraRows}
+      </div>
+
+      <div class="card">
+        <p class="section-title">Текучесть по подразделениям</p>
+        ${turnoverRows || '<div class="empty-dept" style="padding:14px 0">Нет данных</div>'}
+      </div>
+
+      <div class="card acc">
+        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
+          <span>ТОП причин увольнения</span><span class="acc-chev">›</span>
+        </p>
+        <div class="acc-body">
+          ${reasonRows ? `<table class="groups"><thead><tr><th>Причина</th><th>Чел.</th><th>Доля</th></tr></thead><tbody>${reasonRows}</tbody></table>` : '<div class="empty-dept" style="padding:14px 0">Нет данных</div>'}
+        </div>
       </div>
     `;
   }
