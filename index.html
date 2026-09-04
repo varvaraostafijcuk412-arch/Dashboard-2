@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', function () {
  
     if (DATA.omts && !DATA.omts.error) {
       const total = DATA.omts.kpis[0];
-      const deficit = DATA.omts.kpis[1];
+      const deficit = DATA.omts.kpis[3];
       html += `
         <div class="summary-card" data-goto="omts">
           <div class="summary-top">${DATA.omts.icon} ${DATA.omts.label} <span class="chev">›</span></div>
@@ -468,107 +468,130 @@ document.addEventListener('DOMContentLoaded', function () {
       <div class="kpi-grid">${kpiCards}</div>
 
       <div class="card">
-        <p class="section-title">Структура позиций по статусу</p>
-        <div class="chart-wrap"><canvas id="omtsStatusChart"></canvas></div>
+        <p class="section-title">Мука — факт vs норматив, дн.</p>
+        <div class="chart-wrap"><canvas id="omtsMukaChart"></canvas></div>
       </div>
 
       <div class="card">
-        <p class="section-title">Медиана запаса по категориям, дн.</p>
-        <div class="chart-wrap"><canvas id="omtsCategoryChart"></canvas></div>
+        <p class="section-title">Категории запаса — сырьё</p>
+        <div class="chart-wrap"><canvas id="omtsSyrieChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Категории запаса — упаковка</p>
+        <div class="chart-wrap"><canvas id="omtsUpakovkaChart"></canvas></div>
       </div>
 
       <div class="card acc">
         <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
-          <span>Позиции в дефиците (${(omts.deficitList||[]).length})</span><span class="acc-chev">›</span>
+          <span>Сырьё — топ-5 риск дефицита</span><span class="acc-chev">›</span>
         </p>
-        <div class="acc-body">${omtsListTable(omts.deficitList)}</div>
+        <div class="acc-body">${omtsSimpleListTable(omts.syrieDeficit)}</div>
       </div>
 
       <div class="card acc">
         <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
-          <span>Топ позиций с излишком</span><span class="acc-chev">›</span>
+          <span>Сырьё — топ-5 риск неликвида</span><span class="acc-chev">›</span>
         </p>
-        <div class="acc-body">${omtsListTable(omts.excessList)}</div>
+        <div class="acc-body">${omtsSimpleListTable(omts.syrieExcess)}</div>
+      </div>
+
+      <div class="card acc">
+        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
+          <span>Упаковка — топ-5 риск дефицита</span><span class="acc-chev">›</span>
+        </p>
+        <div class="acc-body">${omtsSimpleListTable(omts.upakovkaDeficit)}</div>
+      </div>
+
+      <div class="card acc">
+        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
+          <span>Упаковка — топ-5 риск неликвида</span><span class="acc-chev">›</span>
+        </p>
+        <div class="acc-body">${omtsSimpleListTable(omts.upakovkaExcess)}</div>
       </div>
     `;
   }
 
-  function omtsListTable(list) {
+  function omtsSimpleListTable(list) {
     if (!list || !list.length) return `<div class="empty-dept" style="padding:14px 0">Нет данных</div>`;
     const rows = list.map(p => `
       <tr>
         <td>${p.name}</td>
         <td class="num">${p.days}</td>
-        <td class="num">${p.stock}</td>
       </tr>
     `).join('');
     return `
       <table class="groups">
-        <thead><tr><th>Наименование</th><th>Запас, дн.</th><th>Остаток</th></tr></thead>
+        <thead><tr><th>Наименование</th><th>Запас, дн.</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     `;
   }
 
   function drawOmtsCharts(omts) {
-    const statusColors = {
-      'Дефицит': '#d24b3a',
-      'Норма': '#22a854',
-      'Излишек': '#e3a008',
-      'Нет данных': '#c7c9cf'
-    };
-
-    const pieEl = document.getElementById('omtsStatusChart');
-    if (pieEl && omts.statusChart && omts.statusChart.length) {
-      if (typeof Chart === 'undefined') {
-        pieEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
-      } else {
-        new Chart(pieEl, {
-          type: 'doughnut',
-          data: {
-            labels: omts.statusChart.map(s => s.label),
-            datasets: [{
-              data: omts.statusChart.map(s => s.value),
-              backgroundColor: omts.statusChart.map(s => statusColors[s.label] || '#8a8d93'),
-              borderWidth: 0
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 11 }, color: '#8a8d93' } } }
-          }
-        });
-      }
+    function categoryColor(label) {
+      const l = (label || '').toLowerCase();
+      if (l.indexOf('дефицит') !== -1) return '#d24b3a';
+      if (l.indexOf('риск') !== -1) return '#e3a008';
+      if (l.indexOf('норма') !== -1) return '#22a854';
+      if (l.indexOf('излишек') !== -1) return '#8a8d93';
+      return '#8a8d93';
     }
 
-    const barEl = document.getElementById('omtsCategoryChart');
-    if (barEl && omts.categoryChart && omts.categoryChart.length) {
+    const mukaEl = document.getElementById('omtsMukaChart');
+    if (mukaEl && omts.mukaChart && omts.mukaChart.length) {
       if (typeof Chart === 'undefined') {
-        barEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+        mukaEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
       } else {
-        new Chart(barEl, {
+        new Chart(mukaEl, {
           type: 'bar',
           data: {
-            labels: omts.categoryChart.map(c => c.label),
-            datasets: [{
-              data: omts.categoryChart.map(c => c.value),
-              backgroundColor: '#3a6df0',
-              borderRadius: 6
-            }]
+            labels: omts.mukaChart.map(m => m.name),
+            datasets: [
+              { label: 'Факт', data: omts.mukaChart.map(m => m.fact), backgroundColor: '#3a6df0', borderRadius: 4 },
+              { label: 'Норматив', data: omts.mukaChart.map(m => m.norm), backgroundColor: '#c7c9cf', borderRadius: 4 }
+            ]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
             scales: {
-              x: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { display: false } },
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
               y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
             }
           }
         });
       }
     }
+
+    function drawCategoryDoughnut(elId, data) {
+      const el = document.getElementById(elId);
+      if (!el || !data || !data.length) return;
+      if (typeof Chart === 'undefined') {
+        el.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+        return;
+      }
+      new Chart(el, {
+        type: 'doughnut',
+        data: {
+          labels: data.map(d => d.label),
+          datasets: [{
+            data: data.map(d => d.value),
+            backgroundColor: data.map(d => categoryColor(d.label)),
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } }
+        }
+      });
+    }
+
+    drawCategoryDoughnut('omtsSyrieChart', omts.syrieChart);
+    drawCategoryDoughnut('omtsUpakovkaChart', omts.upakovkaChart);
   }
 
   function renderMarketing(mkt) {
