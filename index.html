@@ -172,7 +172,9 @@ document.addEventListener('DOMContentLoaded', function () {
     { key: 'hr', label: 'Отдел кадров' },
     { key: 'bread', label: 'Хлебный цех' },
     { key: 'omts', label: 'ОМТС' },
-    { key: 'marketing', label: 'Маркетинг' }
+    { key: 'marketing', label: 'Маркетинг' },
+    { key: 'fts', label: 'ФТС' },
+    { key: 'feo', label: 'ПЭО' }
   ];
  
   let DATA = null;
@@ -226,6 +228,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'bread') { main.innerHTML = renderBread(DATA.bread); return; }
     if (key === 'omts') { main.innerHTML = renderOMTS(DATA.omts); if (DATA.omts && !DATA.omts.error) drawOmtsCharts(DATA.omts); return; }
     if (key === 'marketing') { main.innerHTML = renderMarketing(DATA.marketing); if (DATA.marketing && !DATA.marketing.error) drawMarketingCharts(DATA.marketing); return; }
+    if (key === 'fts') { main.innerHTML = renderFTS(DATA.fts); if (DATA.fts && !DATA.fts.error) drawFTSCharts(DATA.fts); return; }
+    if (key === 'feo') { main.innerHTML = renderFEO(DATA.feo); if (DATA.feo && !DATA.feo.error) drawFEOCharts(DATA.feo); return; }
   }
  
   function goTab(key) {
@@ -240,7 +244,51 @@ document.addEventListener('DOMContentLoaded', function () {
  
   function renderSummary() {
     let html = '';
- 
+
+    // Собираем "узкие места" и "сильные стороны" по всем отделам сразу
+    const depts = [
+      { key: 'hr', icon: '👥', label: 'Отдел кадров' },
+      { key: 'bread', icon: '🍞', label: 'Хлебный цех' },
+      { key: 'omts', icon: '📦', label: 'ОМТС' },
+      { key: 'marketing', icon: '📣', label: 'Маркетинг' },
+      { key: 'fts', icon: '🏬', label: 'ФТС' },
+      { key: 'feo', icon: '📊', label: 'ПЭО' }
+    ];
+    const bottlenecks = [];
+    const highlights = [];
+    depts.forEach(d => {
+      const dept = DATA[d.key];
+      if (!dept || dept.error || !dept.kpis) return;
+      dept.kpis.forEach(k => {
+        if (k.status === 'bad') bottlenecks.push({ dept: d, kpi: k });
+        if (k.status === 'good') highlights.push({ dept: d, kpi: k });
+      });
+    });
+
+    if (bottlenecks.length || highlights.length) {
+      html += `<div class="card">
+        <p class="section-title">Узкие места и сильные стороны — по всем отделам</p>`;
+      if (bottlenecks.length) {
+        html += `<p style="font-size:12px;color:var(--bad-fg);font-weight:600;margin:10px 0 6px">⚠ Требуют внимания</p>`;
+        html += bottlenecks.map(b => `
+          <div class="row">
+            <span class="row-name">${b.dept.icon} ${b.dept.label} — ${b.kpi.label}</span>
+            <span class="row-value">${b.kpi.value}</span>
+          </div>
+        `).join('');
+      }
+      if (highlights.length) {
+        html += `<p style="font-size:12px;color:var(--good-fg);font-weight:600;margin:14px 0 6px">✓ Хорошие показатели</p>`;
+        html += highlights.map(h => `
+          <div class="row">
+            <span class="row-name">${h.dept.icon} ${h.dept.label} — ${h.kpi.label}</span>
+            <span class="row-value">${h.kpi.value}</span>
+          </div>
+        `).join('');
+      }
+      html += `</div>`;
+    }
+
     if (DATA.hr && !DATA.hr.error) {
       const turnover = DATA.hr.kpis[0];
       const staffed = DATA.hr.kpis[1];
@@ -926,6 +974,281 @@ document.addEventListener('DOMContentLoaded', function () {
             plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
             scales: {
               x: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      }
+    }
+  }
+
+  function renderFTS(fts) {
+    if (!fts || fts.error) return `<div class="empty-dept">Таблица ФТС недоступна</div>`;
+
+    const kpiCards = fts.kpis.map(k => `
+      <div class="kpi" onclick="this.classList.toggle('open')">
+        <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
+        <div class="kpi-value">${k.value}</div>
+        ${badgeHtml(k)}
+        <div class="kpi-detail">${kpiDetail(k)}</div>
+      </div>
+    `).join('');
+
+    const signalRows = (fts.weeklySignals || []).map(s => `
+      <tr>
+        <td>${s.name}</td>
+        <td class="num">${s.deltaRevenue}%</td>
+        <td>${s.status}</td>
+      </tr>
+    `).join('');
+
+    return `
+      ${fts.period ? `<p class="date" style="margin:-4px 0 12px">${fts.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+
+      <div class="card">
+        <p class="section-title">Выручка по магазинам — 2026 vs 2025</p>
+        <div class="chart-wrap"><canvas id="ftsRevenueChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Δ выручка за неделю по магазинам, %</p>
+        <div class="chart-wrap" style="height:260px"><canvas id="ftsSignalsChart"></canvas></div>
+      </div>
+
+      <div class="card acc">
+        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
+          <span>Сигналы по магазинам — подробно</span><span class="acc-chev">›</span>
+        </p>
+        <div class="acc-body">
+          ${signalRows ? `<table class="groups"><thead><tr><th>Магазин</th><th>Δ выручка</th><th>Статус</th></tr></thead><tbody>${signalRows}</tbody></table>` : '<div class="empty-dept" style="padding:14px 0">Нет данных</div>'}
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Возврат, % по магазинам</p>
+        <div class="chart-wrap"><canvas id="ftsReturnsChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Недовозы (—) / довозы (+), руб</p>
+        <div class="chart-wrap"><canvas id="ftsShortagesChart"></canvas></div>
+      </div>
+    `;
+  }
+
+  function drawFTSCharts(fts) {
+    const revEl = document.getElementById('ftsRevenueChart');
+    if (revEl && fts.storeRevenue && fts.storeRevenue.length) {
+      if (typeof Chart === 'undefined') {
+        revEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      } else {
+        new Chart(revEl, {
+          type: 'bar',
+          data: {
+            labels: fts.storeRevenue.map(s => s.name),
+            datasets: [
+              { label: '2026', data: fts.storeRevenue.map(s => s.rev2026), backgroundColor: '#3a6df0', borderRadius: 4 },
+              { label: '2025', data: fts.storeRevenue.map(s => s.rev2025), backgroundColor: '#c7c9cf', borderRadius: 4 }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      }
+    }
+
+    const sigEl = document.getElementById('ftsSignalsChart');
+    if (sigEl && fts.weeklySignals && fts.weeklySignals.length) {
+      if (typeof Chart === 'undefined') {
+        sigEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      } else {
+        new Chart(sigEl, {
+          type: 'bar',
+          data: {
+            labels: fts.weeklySignals.map(s => s.name),
+            datasets: [{
+              data: fts.weeklySignals.map(s => s.deltaRevenue),
+              backgroundColor: fts.weeklySignals.map(s => s.deltaRevenue >= 0 ? '#22a854' : '#d24b3a'),
+              borderRadius: 4
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
+              y: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } }
+            }
+          }
+        });
+      }
+    }
+
+    const retEl = document.getElementById('ftsReturnsChart');
+    if (retEl && fts.returns && fts.returns.length) {
+      if (typeof Chart === 'undefined') {
+        retEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      } else {
+        new Chart(retEl, {
+          type: 'bar',
+          data: {
+            labels: fts.returns.map(r => r.name),
+            datasets: [{ data: fts.returns.map(r => r.pct), backgroundColor: '#e3a008', borderRadius: 4 }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      }
+    }
+
+    const shEl = document.getElementById('ftsShortagesChart');
+    if (shEl && fts.shortages && fts.shortages.length) {
+      if (typeof Chart === 'undefined') {
+        shEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      } else {
+        new Chart(shEl, {
+          type: 'bar',
+          data: {
+            labels: fts.shortages.map(s => s.name),
+            datasets: [{
+              data: fts.shortages.map(s => s.sum),
+              backgroundColor: fts.shortages.map(s => s.sum >= 0 ? '#22a854' : '#d24b3a'),
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      }
+    }
+  }
+
+  function renderFEO(feo) {
+    if (!feo || feo.error) return `<div class="empty-dept">Таблица ПЭО недоступна</div>`;
+
+    const kpiCards = feo.kpis.map(k => `
+      <div class="kpi" onclick="this.classList.toggle('open')">
+        <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
+        <div class="kpi-value">${k.value}</div>
+        ${badgeHtml(k)}
+        <div class="kpi-detail">${kpiDetail(k)}</div>
+      </div>
+    `).join('');
+
+    return `
+      ${feo.period ? `<p class="date" style="margin:-4px 0 12px">${feo.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+      ${feo.mainFocus ? `
+        <div class="card" style="background:#fff8e1;border:1px solid #f0d68a">
+          <p class="section-title" style="color:#8a6d00">${feo.mainFocus}</p>
+        </div>
+      ` : ''}
+
+      <div class="card">
+        <p class="section-title">Поступления — план vs факт по неделям, тыс.₽</p>
+        <div class="chart-wrap"><canvas id="feoReceiptsChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Выручка — план vs факт по неделям, тыс.₽</p>
+        <div class="chart-wrap"><canvas id="feoRevenueChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Производство — план vs факт по неделям, тн</p>
+        <div class="chart-wrap"><canvas id="feoProductionChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Реализация — план vs факт по неделям, тн</p>
+        <div class="chart-wrap"><canvas id="feoSalesChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Коэффициент оборачиваемости ДЗ, по месяцам</p>
+        <div class="chart-wrap"><canvas id="feoDrChart"></canvas></div>
+      </div>
+    `;
+  }
+
+  function drawFEOWeeklyChart(elId, data, planLabel, factLabel) {
+    const el = document.getElementById(elId);
+    if (!el || !data || !data.length) return;
+    if (typeof Chart === 'undefined') {
+      el.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      return;
+    }
+    new Chart(el, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => d.period),
+        datasets: [
+          { label: planLabel || 'План', data: data.map(d => d.plan), backgroundColor: '#c7c9cf', borderRadius: 4 },
+          { label: factLabel || 'Факт', data: data.map(d => d.fact), backgroundColor: '#3a6df0', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+        scales: {
+          x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+          y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+        }
+      }
+    });
+  }
+
+  function drawFEOCharts(feo) {
+    drawFEOWeeklyChart('feoReceiptsChart', feo.receiptsChart);
+    drawFEOWeeklyChart('feoRevenueChart', feo.revenueChart);
+    drawFEOWeeklyChart('feoProductionChart', feo.productionChart);
+    drawFEOWeeklyChart('feoSalesChart', feo.salesChart);
+
+    const drEl = document.getElementById('feoDrChart');
+    if (drEl && feo.drTurnoverChart && feo.drTurnoverChart.length) {
+      if (typeof Chart === 'undefined') {
+        drEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
+      } else {
+        new Chart(drEl, {
+          type: 'line',
+          data: {
+            labels: feo.drTurnoverChart.map(d => d.month),
+            datasets: [
+              { label: '2025', data: feo.drTurnoverChart.map(d => d.year1), borderColor: '#c7c9cf', backgroundColor: 'transparent', tension: 0.3 },
+              { label: '2026', data: feo.drTurnoverChart.map(d => d.year2), borderColor: '#3a6df0', backgroundColor: 'transparent', tension: 0.3 }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
               y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
             }
           }
