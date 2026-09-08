@@ -714,6 +714,8 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
     `).join('');
 
+    const breadChangeHasData = (mkt.breadChangeChart || []).some(c => c.pct != null);
+
     return `
       ${mkt.period ? `<p class="date" style="margin:-4px 0 12px">${mkt.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
@@ -735,10 +737,12 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="chart-wrap" style="height:280px"><canvas id="mktBreadTopChart"></canvas></div>
       </div>
 
+      ${breadChangeHasData ? `
       <div class="card">
         <p class="section-title">Батон нарезной — изменение показателей за неделю, %</p>
         <div class="chart-wrap"><canvas id="mktBreadChangeChart"></canvas></div>
       </div>
+      ` : ''}
 
       <div class="card">
         <p class="section-title">Ретейли — изменение показателей за неделю, %</p>
