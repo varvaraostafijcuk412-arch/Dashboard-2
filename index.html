@@ -717,6 +717,13 @@ document.addEventListener('DOMContentLoaded', function () {
     return `
       ${mkt.period ? `<p class="date" style="margin:-4px 0 12px">${mkt.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
+      ${mkt.productOfWeek ? `
+        <div class="card" style="background:#fff8e1;border:1px solid #f0d68a">
+          <p class="section-title" style="color:#8a6d00">⭐ Товар недели: ${mkt.productOfWeek.name}</p>
+          <div class="kpi-value" style="font-size:20px">${mkt.productOfWeek.current}${mkt.productOfWeek.previous != null ? ` <span style="font-size:13px;color:var(--dim);font-weight:400">(было ${mkt.productOfWeek.previous})</span>` : ''}</div>
+          ${mkt.productOfWeek.pct != null ? `<span class="badge ${mkt.productOfWeek.pct >= 0 ? 'good' : 'bad'}">${mkt.productOfWeek.pct >= 0 ? '+' : ''}${mkt.productOfWeek.pct}% к пред. неделе</span>` : ''}
+        </div>
+      ` : ''}
 
       <div class="card">
         <p class="section-title">Конверсия по магазинам, %</p>
