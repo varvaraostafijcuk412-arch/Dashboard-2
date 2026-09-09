@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       return;
     }
-    if (key === 'bread') { main.innerHTML = renderBread(DATA.bread); return; }
+    if (key === 'bread') { main.innerHTML = renderBread(DATA.bread); if (DATA.bread && !DATA.bread.error) drawBreadCharts(DATA.bread); return; }
     if (key === 'omts') { main.innerHTML = renderOMTS(DATA.omts); if (DATA.omts && !DATA.omts.error) drawOmtsCharts(DATA.omts); return; }
     if (key === 'marketing') { main.innerHTML = renderMarketing(DATA.marketing); if (DATA.marketing && !DATA.marketing.error) drawMarketingCharts(DATA.marketing); return; }
     if (key === 'fts') { main.innerHTML = renderFTS(DATA.fts); if (DATA.fts && !DATA.fts.error) drawFTSCharts(DATA.fts); return; }
@@ -268,21 +268,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
  
     if (DATA.bread && !DATA.bread.error) {
-      const fulfill = DATA.bread.kpis[0];
-      const defect = DATA.bread.kpis[1];
+      const sort1 = DATA.bread.kpis[0];
+      const darn = DATA.bread.kpis[1];
       html += `
         <div class="summary-card" data-goto="bread">
           <div class="summary-top">${DATA.bread.icon} ${DATA.bread.label} <span class="chev">›</span></div>
           <div class="summary-grid">
             <div class="summary-metric">
-              <div class="label">Вып. заявок</div>
-              <div class="value">${fulfill.value}</div>
-              ${badgeHtml(fulfill)}
+              <div class="label">${sort1.label.split(',')[0]}</div>
+              <div class="value">${sort1.value}</div>
+              ${badgeHtml(sort1)}
             </div>
             <div class="summary-metric">
-              <div class="label">${defect.label.split(',')[0]}</div>
-              <div class="value">—</div>
-              <span class="badge nodata">нет данных</span>
+              <div class="label">${darn.label.split(',')[0]}</div>
+              <div class="value">${darn.value}</div>
+              ${badgeHtml(darn)}
             </div>
           </div>
         </div>`;
@@ -574,33 +574,90 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="kpi-detail">${kpiDetail(k)}</div>
       </div>
     `).join('');
- 
-    const groupRows = (bread.groups || []).map(g => `
-      <tr>
-        <td>${g.name}</td>
-        <td class="num">${g.plan} ${g.unit}</td>
-        <td class="num">${g.fact} ${g.unit}</td>
-        <td class="num ${g.pctValue>=100?'pct-good':'pct-bad'}">${g.pctLabel}</td>
-      </tr>
-    `).join('');
+
+    const pcsHasData = bread.weeklyPcs && bread.weeklyPcs.some(w => w.plan1 != null || w.fact1 != null || w.plan2 != null || w.fact2 != null);
+    const pcsDeltaHasData = bread.weeklyPcs && bread.weeklyPcs.some(w => w.delta1 != null || w.delta2 != null);
+    const kgHasData = bread.weeklyKg && bread.weeklyKg.some(w => w.plan1 != null || w.fact1 != null || w.plan2 != null || w.fact2 != null);
+    const kgDeltaHasData = bread.weeklyKg && bread.weeklyKg.some(w => w.delta1 != null || w.delta2 != null);
  
     return `
       ${bread.period ? `<p class="date" style="margin:-4px 0 12px">Отчётная неделя: ${bread.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
- 
+
+      ${pcsHasData ? `
       <div class="card">
-        <p class="section-title">Выполнение заявок по группам изделий</p>
-        <table class="groups">
-          <thead><tr><th>Группа</th><th>Заявка</th><th>Факт</th><th>% вып.</th></tr></thead>
-          <tbody>${groupRows}</tbody>
-        </table>
+        <p class="section-title">1 сорт — план/факт по неделям, шт</p>
+        <div class="chart-wrap"><canvas id="breadSortChart"></canvas></div>
       </div>
- 
+
       <div class="card">
-        <p class="section-title">% выполнения заявок по группам</p>
-        <div class="chart-wrap"><canvas id="breadChart"></canvas></div>
+        <p class="section-title">Дарницкий — план/факт по неделям, шт</p>
+        <div class="chart-wrap"><canvas id="breadDarnChart"></canvas></div>
       </div>
+      ` : ''}
+
+      ${pcsDeltaHasData ? `
+      <div class="card">
+        <p class="section-title">Δ неделя-к-неделе — 1 сорт и Дарницкий, %</p>
+        <div class="chart-wrap"><canvas id="breadPcsDeltaChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${kgHasData ? `
+      <div class="card">
+        <p class="section-title">МШ+пр.хлеба — план/факт по неделям, кг</p>
+        <div class="chart-wrap"><canvas id="breadMshChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Рондо — план/факт по неделям, кг</p>
+        <div class="chart-wrap"><canvas id="breadRondChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${kgDeltaHasData ? `
+      <div class="card">
+        <p class="section-title">Δ неделя-к-неделе — МШ+пр.хлеба и Рондо, %</p>
+        <div class="chart-wrap"><canvas id="breadKgDeltaChart"></canvas></div>
+      </div>
+      ` : ''}
     `;
+  }
+
+  function drawBreadCharts(bread) {
+    function barTwoSeries(id, labels, s1, s1data, s2, s2data) {
+      const el = document.getElementById(id);
+      if (!el || typeof Chart === 'undefined') return;
+      new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: s1, data: s1data, backgroundColor: '#c7c9cf', borderRadius: 4 },
+            { label: s2, data: s2data, backgroundColor: '#3a6df0', borderRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+          scales: {
+            x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+          }
+        }
+      });
+    }
+
+    if (bread.weeklyPcs && bread.weeklyPcs.length) {
+      barTwoSeries('breadSortChart', bread.weeklyPcs.map(w => w.week), 'План', bread.weeklyPcs.map(w => w.plan1), 'Факт', bread.weeklyPcs.map(w => w.fact1));
+      barTwoSeries('breadDarnChart', bread.weeklyPcs.map(w => w.week), 'План', bread.weeklyPcs.map(w => w.plan2), 'Факт', bread.weeklyPcs.map(w => w.fact2));
+      barTwoSeries('breadPcsDeltaChart', bread.weeklyPcs.map(w => w.week), '1 сорт', bread.weeklyPcs.map(w => w.delta1), 'Дарницкий', bread.weeklyPcs.map(w => w.delta2));
+    }
+    if (bread.weeklyKg && bread.weeklyKg.length) {
+      barTwoSeries('breadMshChart', bread.weeklyKg.map(w => w.week), 'План', bread.weeklyKg.map(w => w.plan1), 'Факт', bread.weeklyKg.map(w => w.fact1));
+      barTwoSeries('breadRondChart', bread.weeklyKg.map(w => w.week), 'План', bread.weeklyKg.map(w => w.plan2), 'Факт', bread.weeklyKg.map(w => w.fact2));
+      barTwoSeries('breadKgDeltaChart', bread.weeklyKg.map(w => w.week), 'МШ+пр.хлеба', bread.weeklyKg.map(w => w.delta1), 'Рондо', bread.weeklyKg.map(w => w.delta2));
+    }
   }
  
   function renderOMTS(omts) {
@@ -1440,38 +1497,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  const observer = new MutationObserver(() => {
-    const el = document.getElementById('breadChart');
-    if (el && !el.dataset.drawn && DATA && DATA.bread && DATA.bread.groups) {
-      el.dataset.drawn = '1';
-      if (typeof Chart === 'undefined') {
-        el.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
-        return;
-      }
-      new Chart(el, {
-        type: 'bar',
-        data: {
-          labels: DATA.bread.groups.map(g => g.name),
-          datasets: [{
-            data: DATA.bread.groups.map(g => g.pctValue),
-            backgroundColor: DATA.bread.groups.map(g => g.pctValue >= 100 ? '#22a854' : '#d24b3a'),
-            borderRadius: 6
-          }]
-        },
-        options: {
-          responsive:true,
-          maintainAspectRatio:false,
-          plugins:{ legend:{ display:false } },
-          scales:{
-            x:{ ticks:{ color:'#8a8d93', font:{size:10} }, grid:{ display:false } },
-            y:{ ticks:{ color:'#8a8d93', font:{size:10}, callback:v=>v+'%' }, grid:{ color:'#eceef1' } }
-          }
-        }
-      });
-    }
-  });
-  observer.observe(document.getElementById('main'), { childList:true, subtree:true });
- 
   load();
 });
 </script>
