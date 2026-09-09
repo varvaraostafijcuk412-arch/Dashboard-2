@@ -174,7 +174,8 @@ document.addEventListener('DOMContentLoaded', function () {
     { key: 'omts', label: 'ОМТС' },
     { key: 'marketing', label: 'Маркетинг' },
     { key: 'fts', label: 'ФТС' },
-    { key: 'feo', label: 'ПЭО' }
+    { key: 'feo', label: 'ФЭО' },
+    { key: 'konditerka', label: 'Кондитерский цех' }
   ];
  
   let DATA = null;
@@ -230,6 +231,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'marketing') { main.innerHTML = renderMarketing(DATA.marketing); if (DATA.marketing && !DATA.marketing.error) drawMarketingCharts(DATA.marketing); return; }
     if (key === 'fts') { main.innerHTML = renderFTS(DATA.fts); if (DATA.fts && !DATA.fts.error) drawFTSCharts(DATA.fts); return; }
     if (key === 'feo') { main.innerHTML = renderFEO(DATA.feo); if (DATA.feo && !DATA.feo.error) drawFEOCharts(DATA.feo); return; }
+    if (key === 'konditerka') { main.innerHTML = renderKonditerka(DATA.konditerka); if (DATA.konditerka && !DATA.konditerka.error) drawKonditerkaCharts(DATA.konditerka); return; }
   }
  
   function goTab(key) {
@@ -244,50 +246,6 @@ document.addEventListener('DOMContentLoaded', function () {
  
   function renderSummary() {
     let html = '';
-
-    // Собираем "узкие места" и "сильные стороны" по всем отделам сразу
-    const depts = [
-      { key: 'hr', icon: '👥', label: 'Отдел кадров' },
-      { key: 'bread', icon: '🍞', label: 'Хлебный цех' },
-      { key: 'omts', icon: '📦', label: 'ОМТС' },
-      { key: 'marketing', icon: '📣', label: 'Маркетинг' },
-      { key: 'fts', icon: '🏬', label: 'ФТС' },
-      { key: 'feo', icon: '📊', label: 'ПЭО' }
-    ];
-    const bottlenecks = [];
-    const highlights = [];
-    depts.forEach(d => {
-      const dept = DATA[d.key];
-      if (!dept || dept.error || !dept.kpis) return;
-      dept.kpis.forEach(k => {
-        if (k.status === 'bad') bottlenecks.push({ dept: d, kpi: k });
-        if (k.status === 'good') highlights.push({ dept: d, kpi: k });
-      });
-    });
-
-    if (bottlenecks.length || highlights.length) {
-      html += `<div class="card">
-        <p class="section-title">Узкие места и сильные стороны — по всем отделам</p>`;
-      if (bottlenecks.length) {
-        html += `<p style="font-size:12px;color:var(--bad-fg);font-weight:600;margin:10px 0 6px">⚠ Требуют внимания</p>`;
-        html += bottlenecks.map(b => `
-          <div class="row">
-            <span class="row-name">${b.dept.icon} ${b.dept.label} — ${b.kpi.label}</span>
-            <span class="row-value">${b.kpi.value}</span>
-          </div>
-        `).join('');
-      }
-      if (highlights.length) {
-        html += `<p style="font-size:12px;color:var(--good-fg);font-weight:600;margin:14px 0 6px">✓ Хорошие показатели</p>`;
-        html += highlights.map(h => `
-          <div class="row">
-            <span class="row-name">${h.dept.icon} ${h.dept.label} — ${h.kpi.label}</span>
-            <span class="row-value">${h.kpi.value}</span>
-          </div>
-        `).join('');
-      }
-      html += `</div>`;
-    }
 
     if (DATA.hr && !DATA.hr.error) {
       const turnover = DATA.hr.kpis[0];
@@ -363,6 +321,44 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="summary-metric">
               <div class="label">${conv.label}</div>
               <div class="value">${conv.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if (DATA.feo && !DATA.feo.error) {
+      const receipts = DATA.feo.kpis[0];
+      const revenue = DATA.feo.kpis[1];
+      html += `
+        <div class="summary-card" data-goto="feo">
+          <div class="summary-top">${DATA.feo.icon} ${DATA.feo.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${receipts.label}</div>
+              <div class="value">${receipts.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${revenue.label}</div>
+              <div class="value">${revenue.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if (DATA.konditerka && !DATA.konditerka.error) {
+      const tortovo = DATA.konditerka.kpis[0];
+      const saharist = DATA.konditerka.kpis[1];
+      html += `
+        <div class="summary-card" data-goto="konditerka">
+          <div class="summary-top">${DATA.konditerka.icon} ${DATA.konditerka.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${tortovo.label}</div>
+              <div class="value">${tortovo.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${saharist.label}</div>
+              <div class="value">${saharist.value}</div>
             </div>
           </div>
         </div>`;
@@ -763,6 +759,11 @@ document.addEventListener('DOMContentLoaded', function () {
     `).join('');
 
     const breadChangeHasData = (mkt.breadChangeChart || []).some(c => c.pct != null);
+    const conversionHasData = mkt.conversionChart && mkt.conversionChart.shops && mkt.conversionChart.shops.some(s => s.week1 != null || s.week2 != null);
+    const breadTopHasData = mkt.breadTopChart && (((mkt.breadTopChart.growth || []).length) || ((mkt.breadTopChart.decline || []).length));
+    const retailHasData = (mkt.retailChangeChart || []).some(c => c.pct != null);
+    const noveltiesHasData = (mkt.noveltiesChart || []).length > 0;
+    const gisHasData = mkt.reviews2gisChart && mkt.reviews2gisChart.metrics && mkt.reviews2gisChart.metrics.length > 0;
 
     return `
       ${mkt.period ? `<p class="date" style="margin:-4px 0 12px">${mkt.period}</p>` : ''}
@@ -775,15 +776,19 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
       ` : ''}
 
+      ${conversionHasData ? `
       <div class="card">
         <p class="section-title">Конверсия по магазинам, %</p>
         <div class="chart-wrap"><canvas id="mktConversionChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${breadTopHasData ? `
       <div class="card">
         <p class="section-title">Батон нарезной — топ каналов, откл. шт</p>
         <div class="chart-wrap" style="height:280px"><canvas id="mktBreadTopChart"></canvas></div>
       </div>
+      ` : ''}
 
       ${breadChangeHasData ? `
       <div class="card">
@@ -792,20 +797,26 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
       ` : ''}
 
+      ${retailHasData ? `
       <div class="card">
         <p class="section-title">Ретейли — изменение показателей за неделю, %</p>
         <div class="chart-wrap"><canvas id="mktRetailChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${noveltiesHasData ? `
       <div class="card">
         <p class="section-title">Новинки — доля рынка, %</p>
         <div class="chart-wrap"><canvas id="mktNoveltiesChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${gisHasData ? `
       <div class="card">
         <p class="section-title">Отзывы 2ГИС</p>
         <div class="chart-wrap"><canvas id="mkt2gisChart"></canvas></div>
       </div>
+      ` : ''}
     `;
   }
 
@@ -1002,15 +1013,23 @@ document.addEventListener('DOMContentLoaded', function () {
       </tr>
     `).join('');
 
+    const revenueHasData = fts.storeRevenue && fts.storeRevenue.length > 0;
+    const signalsHasData = fts.weeklySignals && fts.weeklySignals.length > 0;
+    const returnsHasData = fts.returns && fts.returns.length > 0;
+    const shortagesHasData = fts.shortages && fts.shortages.some(s => s.sum);
+
     return `
       ${fts.period ? `<p class="date" style="margin:-4px 0 12px">${fts.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
 
+      ${revenueHasData ? `
       <div class="card">
         <p class="section-title">Выручка по магазинам — 2026 vs 2025</p>
         <div class="chart-wrap"><canvas id="ftsRevenueChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${signalsHasData ? `
       <div class="card">
         <p class="section-title">Δ выручка за неделю по магазинам, %</p>
         <div class="chart-wrap" style="height:260px"><canvas id="ftsSignalsChart"></canvas></div>
@@ -1021,19 +1040,24 @@ document.addEventListener('DOMContentLoaded', function () {
           <span>Сигналы по магазинам — подробно</span><span class="acc-chev">›</span>
         </p>
         <div class="acc-body">
-          ${signalRows ? `<table class="groups"><thead><tr><th>Магазин</th><th>Δ выручка</th><th>Статус</th></tr></thead><tbody>${signalRows}</tbody></table>` : '<div class="empty-dept" style="padding:14px 0">Нет данных</div>'}
+          <table class="groups"><thead><tr><th>Магазин</th><th>Δ выручка</th><th>Статус</th></tr></thead><tbody>${signalRows}</tbody></table>
         </div>
       </div>
+      ` : ''}
 
+      ${returnsHasData ? `
       <div class="card">
         <p class="section-title">Возврат, % по магазинам</p>
         <div class="chart-wrap"><canvas id="ftsReturnsChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${shortagesHasData ? `
       <div class="card">
         <p class="section-title">Недовозы (—) / довозы (+), руб</p>
         <div class="chart-wrap"><canvas id="ftsShortagesChart"></canvas></div>
       </div>
+      ` : ''}
     `;
   }
 
@@ -1148,7 +1172,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function renderFEO(feo) {
-    if (!feo || feo.error) return `<div class="empty-dept">Таблица ПЭО недоступна</div>`;
+    if (!feo || feo.error) return `<div class="empty-dept">Таблица ФЭО недоступна</div>`;
 
     const kpiCards = feo.kpis.map(k => `
       <div class="kpi" onclick="this.classList.toggle('open')">
@@ -1159,6 +1183,12 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
     `).join('');
 
+    const receiptsHasData = feo.receiptsChart && feo.receiptsChart.some(d => d.plan != null || d.fact != null);
+    const revenueHasData = feo.revenueChart && feo.revenueChart.some(d => d.plan != null || d.fact != null);
+    const productionHasData = feo.productionChart && feo.productionChart.some(d => d.plan != null || d.fact != null);
+    const salesHasData = feo.salesChart && feo.salesChart.some(d => d.plan != null || d.fact != null);
+    const drHasData = feo.drTurnoverChart && feo.drTurnoverChart.some(d => d.year1 != null || d.year2 != null);
+
     return `
       ${feo.period ? `<p class="date" style="margin:-4px 0 12px">${feo.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
@@ -1168,30 +1198,40 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
       ` : ''}
 
+      ${receiptsHasData ? `
       <div class="card">
         <p class="section-title">Поступления — план vs факт по неделям, тыс.₽</p>
         <div class="chart-wrap"><canvas id="feoReceiptsChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${revenueHasData ? `
       <div class="card">
         <p class="section-title">Выручка — план vs факт по неделям, тыс.₽</p>
         <div class="chart-wrap"><canvas id="feoRevenueChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${productionHasData ? `
       <div class="card">
         <p class="section-title">Производство — план vs факт по неделям, тн</p>
         <div class="chart-wrap"><canvas id="feoProductionChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${salesHasData ? `
       <div class="card">
         <p class="section-title">Реализация — план vs факт по неделям, тн</p>
         <div class="chart-wrap"><canvas id="feoSalesChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${drHasData ? `
       <div class="card">
         <p class="section-title">Коэффициент оборачиваемости ДЗ, по месяцам</p>
         <div class="chart-wrap"><canvas id="feoDrChart"></canvas></div>
       </div>
+      ` : ''}
     `;
   }
 
@@ -1254,6 +1294,160 @@ document.addEventListener('DOMContentLoaded', function () {
           }
         });
       }
+    }
+  }
+
+  function renderKonditerka(k) {
+    if (!k || k.error) return `<div class="empty-dept">Таблица кондитерского цеха недоступна</div>`;
+
+    const kpiCards = k.kpis.map(kp => `
+      <div class="kpi" onclick="this.classList.toggle('open')">
+        <div class="kpi-top"><span class="kpi-label">${kp.label}</span><span class="kpi-chev">›</span></div>
+        <div class="kpi-value">${kp.value}</div>
+        ${badgeHtml(kp)}
+        <div class="kpi-detail">${kpiDetail(kp)}</div>
+      </div>
+    `).join('');
+
+    const weeklyHasData = k.weeklyChart && k.weeklyChart.some(w => w.planTortovo != null || w.factTortovo != null || w.planSaharist != null || w.factSaharist != null);
+    const deltaHasData = k.weeklyChart && k.weeklyChart.some(w => w.deltaTortovo != null || w.deltaSaharist != null);
+    const productsHasData = k.productsChart && k.productsChart.some(p => p.pm != null || p.marmelad != null);
+    const appgTortovoHasData = k.appgTortovo && k.appgTortovo.some(a => a.year2025 != null || a.year2026 != null);
+    const appgSaharistHasData = k.appgSaharist && k.appgSaharist.some(a => a.year2025 != null || a.year2026 != null);
+    const staffHasData = k.staffChart && k.staffChart.some(s => s.people);
+
+    return `
+      ${k.period ? `<p class="date" style="margin:-4px 0 12px">${k.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+
+      ${weeklyHasData ? `
+      <div class="card">
+        <p class="section-title">Тортово-кондитерские — план/факт по неделям, кг</p>
+        <div class="chart-wrap"><canvas id="kondTortovoChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Сахаристые — план/факт по неделям, кг</p>
+        <div class="chart-wrap"><canvas id="kondSaharistChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${deltaHasData ? `
+      <div class="card">
+        <p class="section-title">Изменение факта неделя-к-неделе, %</p>
+        <div class="chart-wrap"><canvas id="kondDeltaChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${productsHasData ? `
+      <div class="card">
+        <p class="section-title">Продукция по видам, кг (П/М, Мармелад)</p>
+        <div class="chart-wrap"><canvas id="kondProductsChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${appgTortovoHasData ? `
+      <div class="card">
+        <p class="section-title">Тортово-кондитерские — АППГ по месяцам, тонн</p>
+        <div class="chart-wrap"><canvas id="kondAppgTortovoChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${appgSaharistHasData ? `
+      <div class="card">
+        <p class="section-title">Сахаристые — АППГ по месяцам, тонн</p>
+        <div class="chart-wrap"><canvas id="kondAppgSaharistChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${staffHasData ? `
+      <div class="card">
+        <p class="section-title">Персонал по бригадам — человек за неделю</p>
+        <div class="chart-wrap" style="height:280px"><canvas id="kondStaffChart"></canvas></div>
+      </div>
+      ` : ''}
+    `;
+  }
+
+  function drawKonditerkaCharts(k) {
+    function barTwoSeries(id, labels, s1, s1data, s2, s2data) {
+      const el = document.getElementById(id);
+      if (!el || typeof Chart === 'undefined') return;
+      new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: s1, data: s1data, backgroundColor: '#c7c9cf', borderRadius: 4 },
+            { label: s2, data: s2data, backgroundColor: '#3a6df0', borderRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+          scales: {
+            x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+          }
+        }
+      });
+    }
+
+    function lineTwoSeries(id, labels, s1, s1data, s2, s2data) {
+      const el = document.getElementById(id);
+      if (!el || typeof Chart === 'undefined') return;
+      new Chart(el, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: s1, data: s1data, borderColor: '#c7c9cf', backgroundColor: '#c7c9cf', tension: 0.3 },
+            { label: s2, data: s2data, borderColor: '#3a6df0', backgroundColor: '#3a6df0', tension: 0.3 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+          scales: {
+            x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+          }
+        }
+      });
+    }
+
+    if (k.weeklyChart && k.weeklyChart.length) {
+      barTwoSeries('kondTortovoChart', k.weeklyChart.map(w => w.week), 'План', k.weeklyChart.map(w => w.planTortovo), 'Факт', k.weeklyChart.map(w => w.factTortovo));
+      barTwoSeries('kondSaharistChart', k.weeklyChart.map(w => w.week), 'План', k.weeklyChart.map(w => w.planSaharist), 'Факт', k.weeklyChart.map(w => w.factSaharist));
+      barTwoSeries('kondDeltaChart', k.weeklyChart.map(w => w.week), 'Тортово', k.weeklyChart.map(w => w.deltaTortovo), 'Сахаристые', k.weeklyChart.map(w => w.deltaSaharist));
+    }
+    if (k.productsChart && k.productsChart.length) {
+      barTwoSeries('kondProductsChart', k.productsChart.map(p => p.week), 'П/М', k.productsChart.map(p => p.pm), 'Мармелад', k.productsChart.map(p => p.marmelad));
+    }
+    if (k.appgTortovo && k.appgTortovo.length) {
+      lineTwoSeries('kondAppgTortovoChart', k.appgTortovo.map(a => a.month), '2025', k.appgTortovo.map(a => a.year2025), '2026', k.appgTortovo.map(a => a.year2026));
+    }
+    if (k.appgSaharist && k.appgSaharist.length) {
+      lineTwoSeries('kondAppgSaharistChart', k.appgSaharist.map(a => a.month), '2025', k.appgSaharist.map(a => a.year2025), '2026', k.appgSaharist.map(a => a.year2026));
+    }
+    const staffEl = document.getElementById('kondStaffChart');
+    if (staffEl && k.staffChart && k.staffChart.length && typeof Chart !== 'undefined') {
+      new Chart(staffEl, {
+        type: 'bar',
+        data: {
+          labels: k.staffChart.map(s => s.name),
+          datasets: [{ data: k.staffChart.map(s => s.people), backgroundColor: '#3a6df0', borderRadius: 4 }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
+            y: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } }
+          }
+        }
+      });
     }
   }
 
