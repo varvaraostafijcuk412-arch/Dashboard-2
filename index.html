@@ -173,7 +173,6 @@ document.addEventListener('DOMContentLoaded', function () {
     { key: 'bread', label: 'Хлебный цех' },
     { key: 'omts', label: 'ОМТС' },
     { key: 'marketing', label: 'Маркетинг' },
-    { key: 'fts', label: 'ФТС' },
     { key: 'feo', label: 'ФЭО' },
     { key: 'konditerka', label: 'Кондитерский цех' }
   ];
@@ -229,7 +228,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'bread') { main.innerHTML = renderBread(DATA.bread); if (DATA.bread && !DATA.bread.error) drawBreadCharts(DATA.bread); return; }
     if (key === 'omts') { main.innerHTML = renderOMTS(DATA.omts); if (DATA.omts && !DATA.omts.error) drawOmtsCharts(DATA.omts); return; }
     if (key === 'marketing') { main.innerHTML = renderMarketing(DATA.marketing); if (DATA.marketing && !DATA.marketing.error) drawMarketingCharts(DATA.marketing); return; }
-    if (key === 'fts') { main.innerHTML = renderFTS(DATA.fts); if (DATA.fts && !DATA.fts.error) drawFTSCharts(DATA.fts); return; }
     if (key === 'feo') { main.innerHTML = renderFEO(DATA.feo); if (DATA.feo && !DATA.feo.error) drawFEOCharts(DATA.feo); return; }
     if (key === 'konditerka') { main.innerHTML = renderKonditerka(DATA.konditerka); if (DATA.konditerka && !DATA.konditerka.error) drawKonditerkaCharts(DATA.konditerka); return; }
   }
@@ -268,21 +266,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
  
     if (DATA.bread && !DATA.bread.error) {
-      const sort1 = DATA.bread.kpis[0];
-      const darn = DATA.bread.kpis[1];
+      const g1 = DATA.bread.kpis[0];
+      const g2 = DATA.bread.kpis[1];
       html += `
         <div class="summary-card" data-goto="bread">
           <div class="summary-top">${DATA.bread.icon} ${DATA.bread.label} <span class="chev">›</span></div>
           <div class="summary-grid">
             <div class="summary-metric">
-              <div class="label">${sort1.label.split(',')[0]}</div>
-              <div class="value">${sort1.value}</div>
-              ${badgeHtml(sort1)}
+              <div class="label">${g1.label}</div>
+              <div class="value">${g1.value}</div>
             </div>
             <div class="summary-metric">
-              <div class="label">${darn.label.split(',')[0]}</div>
-              <div class="value">${darn.value}</div>
-              ${badgeHtml(darn)}
+              <div class="label">${g2.label}</div>
+              <div class="value">${g2.value}</div>
             </div>
           </div>
         </div>`;
@@ -565,7 +561,7 @@ document.addEventListener('DOMContentLoaded', function () {
  
   function renderBread(bread) {
     if (!bread || bread.error) return `<div class="empty-dept">Таблица хлебного цеха недоступна</div>`;
- 
+
     const kpiCards = bread.kpis.map(k => `
       <div class="kpi" onclick="this.classList.toggle('open')">
         <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
@@ -575,50 +571,58 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
     `).join('');
 
-    const pcsHasData = bread.weeklyPcs && bread.weeklyPcs.some(w => w.plan1 != null || w.fact1 != null || w.plan2 != null || w.fact2 != null);
-    const pcsDeltaHasData = bread.weeklyPcs && bread.weeklyPcs.some(w => w.delta1 != null || w.delta2 != null);
-    const kgHasData = bread.weeklyKg && bread.weeklyKg.some(w => w.plan1 != null || w.fact1 != null || w.plan2 != null || w.fact2 != null);
-    const kgDeltaHasData = bread.weeklyKg && bread.weeklyKg.some(w => w.delta1 != null || w.delta2 != null);
- 
+    const w1 = bread.weeklyChart1 || [];
+    const w2 = bread.weeklyChart2 || [];
+    const planFact1sHasData = w1.some(w => w.plan1s != null || w.fact1s != null);
+    const planFactDarnHasData = w1.some(w => w.planDarn != null || w.factDarn != null);
+    const planFactMshHasData = w2.some(w => w.planMsh != null || w.factMsh != null);
+    const planFactRondoHasData = w2.some(w => w.planRondo != null || w.factRondo != null);
+    const delta1HasData = w1.some(w => w.delta1s != null || w.deltaDarn != null);
+    const delta2HasData = w2.some(w => w.deltaMsh != null || w.deltaRondo != null);
+
     return `
-      ${bread.period ? `<p class="date" style="margin:-4px 0 12px">Отчётная неделя: ${bread.period}</p>` : ''}
+      ${bread.period ? `<p class="date" style="margin:-4px 0 12px">${bread.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
 
-      ${pcsHasData ? `
+      ${planFact1sHasData ? `
       <div class="card">
         <p class="section-title">1 сорт — план/факт по неделям, шт</p>
-        <div class="chart-wrap"><canvas id="breadSortChart"></canvas></div>
+        <div class="chart-wrap"><canvas id="bread1sChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${planFactDarnHasData ? `
       <div class="card">
         <p class="section-title">Дарницкий — план/факт по неделям, шт</p>
         <div class="chart-wrap"><canvas id="breadDarnChart"></canvas></div>
       </div>
       ` : ''}
 
-      ${pcsDeltaHasData ? `
-      <div class="card">
-        <p class="section-title">Δ неделя-к-неделе — 1 сорт и Дарницкий, %</p>
-        <div class="chart-wrap"><canvas id="breadPcsDeltaChart"></canvas></div>
-      </div>
-      ` : ''}
-
-      ${kgHasData ? `
+      ${planFactMshHasData ? `
       <div class="card">
         <p class="section-title">МШ+пр.хлеба — план/факт по неделям, кг</p>
         <div class="chart-wrap"><canvas id="breadMshChart"></canvas></div>
       </div>
+      ` : ''}
 
+      ${planFactRondoHasData ? `
       <div class="card">
         <p class="section-title">Рондо — план/факт по неделям, кг</p>
-        <div class="chart-wrap"><canvas id="breadRondChart"></canvas></div>
+        <div class="chart-wrap"><canvas id="breadRondoChart"></canvas></div>
       </div>
       ` : ''}
 
-      ${kgDeltaHasData ? `
+      ${delta1HasData ? `
+      <div class="card">
+        <p class="section-title">Δ неделя-к-неделе — 1 сорт и Дарницкий, %</p>
+        <div class="chart-wrap"><canvas id="breadDelta1Chart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${delta2HasData ? `
       <div class="card">
         <p class="section-title">Δ неделя-к-неделе — МШ+пр.хлеба и Рондо, %</p>
-        <div class="chart-wrap"><canvas id="breadKgDeltaChart"></canvas></div>
+        <div class="chart-wrap"><canvas id="breadDelta2Chart"></canvas></div>
       </div>
       ` : ''}
     `;
@@ -648,17 +652,21 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    if (bread.weeklyPcs && bread.weeklyPcs.length) {
-      barTwoSeries('breadSortChart', bread.weeklyPcs.map(w => w.week), 'План', bread.weeklyPcs.map(w => w.plan1), 'Факт', bread.weeklyPcs.map(w => w.fact1));
-      barTwoSeries('breadDarnChart', bread.weeklyPcs.map(w => w.week), 'План', bread.weeklyPcs.map(w => w.plan2), 'Факт', bread.weeklyPcs.map(w => w.fact2));
-      barTwoSeries('breadPcsDeltaChart', bread.weeklyPcs.map(w => w.week), '1 сорт', bread.weeklyPcs.map(w => w.delta1), 'Дарницкий', bread.weeklyPcs.map(w => w.delta2));
+    const w1 = bread.weeklyChart1 || [];
+    const w2 = bread.weeklyChart2 || [];
+
+    if (w1.length) {
+      barTwoSeries('bread1sChart', w1.map(w => w.week), 'План', w1.map(w => w.plan1s), 'Факт', w1.map(w => w.fact1s));
+      barTwoSeries('breadDarnChart', w1.map(w => w.week), 'План', w1.map(w => w.planDarn), 'Факт', w1.map(w => w.factDarn));
+      barTwoSeries('breadDelta1Chart', w1.map(w => w.week), '1 сорт', w1.map(w => w.delta1s == null ? null : round1(w.delta1s * 100)), 'Дарницкий', w1.map(w => w.deltaDarn == null ? null : round1(w.deltaDarn * 100)));
     }
-    if (bread.weeklyKg && bread.weeklyKg.length) {
-      barTwoSeries('breadMshChart', bread.weeklyKg.map(w => w.week), 'План', bread.weeklyKg.map(w => w.plan1), 'Факт', bread.weeklyKg.map(w => w.fact1));
-      barTwoSeries('breadRondChart', bread.weeklyKg.map(w => w.week), 'План', bread.weeklyKg.map(w => w.plan2), 'Факт', bread.weeklyKg.map(w => w.fact2));
-      barTwoSeries('breadKgDeltaChart', bread.weeklyKg.map(w => w.week), 'МШ+пр.хлеба', bread.weeklyKg.map(w => w.delta1), 'Рондо', bread.weeklyKg.map(w => w.delta2));
+    if (w2.length) {
+      barTwoSeries('breadMshChart', w2.map(w => w.week), 'План', w2.map(w => w.planMsh), 'Факт', w2.map(w => w.factMsh));
+      barTwoSeries('breadRondoChart', w2.map(w => w.week), 'План', w2.map(w => w.planRondo), 'Факт', w2.map(w => w.factRondo));
+      barTwoSeries('breadDelta2Chart', w2.map(w => w.week), 'МШ+пр.хлеба', w2.map(w => w.deltaMsh == null ? null : round1(w.deltaMsh * 100)), 'Рондо', w2.map(w => w.deltaRondo == null ? null : round1(w.deltaRondo * 100)));
     }
   }
+
  
   function renderOMTS(omts) {
     if (!omts || omts.error) return `<div class="empty-dept">Таблица ОМТС недоступна</div>`;
@@ -1368,6 +1376,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const weeklyHasData = k.weeklyChart && k.weeklyChart.some(w => w.planTortovo != null || w.factTortovo != null || w.planSaharist != null || w.factSaharist != null);
     const deltaHasData = k.weeklyChart && k.weeklyChart.some(w => w.deltaTortovo != null || w.deltaSaharist != null);
+    const productsHasData = k.productsChart && k.productsChart.some(p => p.pm != null || p.marmelad != null);
     const appgTortovoHasData = k.appgTortovo && k.appgTortovo.some(a => a.year2025 != null || a.year2026 != null);
     const appgSaharistHasData = k.appgSaharist && k.appgSaharist.some(a => a.year2025 != null || a.year2026 != null);
     const staffHasData = k.staffChart && k.staffChart.some(s => s.people);
@@ -1392,6 +1401,13 @@ document.addEventListener('DOMContentLoaded', function () {
       <div class="card">
         <p class="section-title">Изменение факта неделя-к-неделе, %</p>
         <div class="chart-wrap"><canvas id="kondDeltaChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${productsHasData ? `
+      <div class="card">
+        <p class="section-title">Продукция по видам, кг (П/М, Мармелад)</p>
+        <div class="chart-wrap"><canvas id="kondProductsChart"></canvas></div>
       </div>
       ` : ''}
 
@@ -1469,6 +1485,9 @@ document.addEventListener('DOMContentLoaded', function () {
       barTwoSeries('kondTortovoChart', k.weeklyChart.map(w => w.week), 'План', k.weeklyChart.map(w => w.planTortovo), 'Факт', k.weeklyChart.map(w => w.factTortovo));
       barTwoSeries('kondSaharistChart', k.weeklyChart.map(w => w.week), 'План', k.weeklyChart.map(w => w.planSaharist), 'Факт', k.weeklyChart.map(w => w.factSaharist));
       barTwoSeries('kondDeltaChart', k.weeklyChart.map(w => w.week), 'Тортово', k.weeklyChart.map(w => w.deltaTortovo), 'Сахаристые', k.weeklyChart.map(w => w.deltaSaharist));
+    }
+    if (k.productsChart && k.productsChart.length) {
+      barTwoSeries('kondProductsChart', k.productsChart.map(p => p.week), 'П/М', k.productsChart.map(p => p.pm), 'Мармелад', k.productsChart.map(p => p.marmelad));
     }
     if (k.appgTortovo && k.appgTortovo.length) {
       lineTwoSeries('kondAppgTortovoChart', k.appgTortovo.map(a => a.month), '2025', k.appgTortovo.map(a => a.year2025), '2026', k.appgTortovo.map(a => a.year2026));
