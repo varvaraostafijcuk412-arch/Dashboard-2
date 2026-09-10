@@ -363,6 +363,10 @@ document.addEventListener('DOMContentLoaded', function () {
     return html || '<div class="empty-dept">Нет данных</div>';
   }
  
+  function round1(n) {
+    return Math.round(n * 10) / 10;
+  }
+
   function badgeHtml(kpi) {
     if (!kpi) return '';
     if (kpi.status === 'nodata' || /нет данных/i.test(kpi.value || '')) {
@@ -630,26 +634,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function drawBreadCharts(bread) {
     function barTwoSeries(id, labels, s1, s1data, s2, s2data) {
-      const el = document.getElementById(id);
-      if (!el || typeof Chart === 'undefined') return;
-      new Chart(el, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [
-            { label: s1, data: s1data, backgroundColor: '#c7c9cf', borderRadius: 4 },
-            { label: s2, data: s2data, backgroundColor: '#3a6df0', borderRadius: 4 }
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
-          scales: {
-            x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
-            y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+      try {
+        const el = document.getElementById(id);
+        if (!el || typeof Chart === 'undefined') return;
+        new Chart(el, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              { label: s1, data: s1data, backgroundColor: '#c7c9cf', borderRadius: 4 },
+              { label: s2, data: s2data, backgroundColor: '#3a6df0', borderRadius: 4 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
           }
-        }
-      });
+        });
+      } catch (e) {
+        console.error('Ошибка отрисовки графика ' + id + ':', e);
+      }
     }
 
     const w1 = bread.weeklyChart1 || [];
