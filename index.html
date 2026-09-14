@@ -174,7 +174,8 @@ document.addEventListener('DOMContentLoaded', function () {
     { key: 'omts', label: 'ОМТС' },
     { key: 'marketing', label: 'Маркетинг' },
     { key: 'feo', label: 'ФЭО' },
-    { key: 'konditerka', label: 'Кондитерский цех' }
+    { key: 'konditerka', label: 'Кондитерский цех' },
+    { key: 'atc', label: 'АТЦ' }
   ];
  
   let DATA = null;
@@ -230,6 +231,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'marketing') { main.innerHTML = renderMarketing(DATA.marketing); if (DATA.marketing && !DATA.marketing.error) drawMarketingCharts(DATA.marketing); return; }
     if (key === 'feo') { main.innerHTML = renderFEO(DATA.feo); if (DATA.feo && !DATA.feo.error) drawFEOCharts(DATA.feo); return; }
     if (key === 'konditerka') { main.innerHTML = renderKonditerka(DATA.konditerka); if (DATA.konditerka && !DATA.konditerka.error) drawKonditerkaCharts(DATA.konditerka); return; }
+    if (key === 'atc') { main.innerHTML = renderATC(DATA.atc); if (DATA.atc && !DATA.atc.error) drawATCCharts(DATA.atc); return; }
   }
  
   function goTab(key) {
@@ -355,6 +357,25 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="summary-metric">
               <div class="label">${saharist.label}</div>
               <div class="value">${saharist.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if (DATA.atc && !DATA.atc.error) {
+      const plan = DATA.atc.kpis[0];
+      const prostoy = DATA.atc.kpis[1];
+      html += `
+        <div class="summary-card" data-goto="atc">
+          <div class="summary-top">${DATA.atc.icon} ${DATA.atc.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${plan.label}</div>
+              <div class="value">${plan.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${prostoy.label}</div>
+              <div class="value">${prostoy.value}</div>
             </div>
           </div>
         </div>`;
@@ -1521,6 +1542,86 @@ document.addEventListener('DOMContentLoaded', function () {
           }
         }
       });
+    }
+  }
+
+  function renderATC(atc) {
+    if (!atc || atc.error) return `<div class="empty-dept">Таблица АТЦ недоступна</div>`;
+
+    const kpiCards = atc.kpis.map(k => `
+      <div class="kpi" onclick="this.classList.toggle('open')">
+        <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
+        <div class="kpi-value">${k.value}</div>
+        ${badgeHtml(k)}
+        <div class="kpi-detail">${kpiDetail(k)}</div>
+      </div>
+    `).join('');
+
+    const w = atc.weeklyChart || [];
+    const planFactHasData = w.some(x => x.plan != null || x.fact != null);
+    const prostoyRezervHasData = w.some(x => x.prostoy != null || x.rezerv != null);
+    const toHasData = w.some(x => x.toPlan != null || x.toFact != null);
+
+    return `
+      ${atc.period ? `<p class="date" style="margin:-4px 0 12px">${atc.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+
+      ${planFactHasData ? `
+      <div class="card">
+        <p class="section-title">План/факт машин в рейсе и отклонение, %</p>
+        <div class="chart-wrap"><canvas id="atcPlanFactChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${prostoyRezervHasData ? `
+      <div class="card">
+        <p class="section-title">Простой (сумма) и резерв (среднее) по неделям</p>
+        <div class="chart-wrap"><canvas id="atcProstoyChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${toHasData ? `
+      <div class="card">
+        <p class="section-title">ТО: план vs факт по неделям</p>
+        <div class="chart-wrap"><canvas id="atcToChart"></canvas></div>
+      </div>
+      ` : ''}
+    `;
+  }
+
+  function drawATCCharts(atc) {
+    function barTwoSeries(id, labels, s1, s1data, s2, s2data) {
+      try {
+        const el = document.getElementById(id);
+        if (!el || typeof Chart === 'undefined') return;
+        new Chart(el, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              { label: s1, data: s1data, backgroundColor: '#c7c9cf', borderRadius: 4 },
+              { label: s2, data: s2data, backgroundColor: '#3a6df0', borderRadius: 4 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Ошибка отрисовки графика ' + id + ':', e);
+      }
+    }
+
+    const w = atc.weeklyChart || [];
+    if (w.length) {
+      barTwoSeries('atcPlanFactChart', w.map(x => x.week), 'План', w.map(x => x.plan), 'Факт', w.map(x => x.fact));
+      barTwoSeries('atcProstoyChart', w.map(x => x.week), 'Простой', w.map(x => x.prostoy), 'Резерв', w.map(x => x.rezerv));
+      barTwoSeries('atcToChart', w.map(x => x.week), 'ТО план', w.map(x => x.toPlan), 'ТО факт', w.map(x => x.toFact));
     }
   }
 
