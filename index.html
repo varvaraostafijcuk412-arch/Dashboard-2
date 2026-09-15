@@ -1404,10 +1404,13 @@ document.addEventListener('DOMContentLoaded', function () {
     `).join('');
 
     const weeklyHasData = k.weeklyChart && k.weeklyChart.some(w => w.planTortovo != null || w.factTortovo != null || w.planSaharist != null || w.factSaharist != null);
-    const deltaHasData = k.weeklyChart && k.weeklyChart.some(w => w.deltaTortovo != null || w.deltaSaharist != null);
+    const deltaHasData = k.weeklyChart && k.weeklyChart.some(w => w.deltaTortovo != null || w.deltaSaharist != null || w.deltaPlanTortovo != null || w.deltaPlanSaharist != null);
+    const devHasData = k.weeklyChart && k.weeklyChart.some(w => w.devTortovo != null || w.devSaharist != null);
     const productsHasData = k.productsChart && k.productsChart.some(p => p.pm != null || p.marmelad != null);
     const appgTortovoHasData = k.appgTortovo && k.appgTortovo.some(a => a.year2025 != null || a.year2026 != null);
     const appgSaharistHasData = k.appgSaharist && k.appgSaharist.some(a => a.year2025 != null || a.year2026 != null);
+    const appgTortovoDeltaHasData = k.appgTortovo && k.appgTortovo.some(a => a.deltaPct != null);
+    const appgSaharistDeltaHasData = k.appgSaharist && k.appgSaharist.some(a => a.deltaPct != null);
     const staffHasData = k.staffChart && k.staffChart.some(s => s.people);
 
     return `
@@ -1426,10 +1429,27 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
       ` : ''}
 
+      ${devHasData ? `
+      <div class="card">
+        <p class="section-title">Тортово-кондитерские — план/факт и отклонение, %</p>
+        <div class="chart-wrap"><canvas id="kondDevTortChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Сахаристые — план/факт и отклонение, %</p>
+        <div class="chart-wrap"><canvas id="kondDevSaharChart"></canvas></div>
+      </div>
+      ` : ''}
+
       ${deltaHasData ? `
       <div class="card">
-        <p class="section-title">Изменение факта неделя-к-неделе, %</p>
-        <div class="chart-wrap"><canvas id="kondDeltaChart"></canvas></div>
+        <p class="section-title">Тортово-кондитерские — Δ неделя-к-неделе (факт и план), %</p>
+        <div class="chart-wrap"><canvas id="kondDeltaTortChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Сахаристые — Δ неделя-к-неделе (факт и план), %</p>
+        <div class="chart-wrap"><canvas id="kondDeltaSaharChart"></canvas></div>
       </div>
       ` : ''}
 
@@ -1447,10 +1467,24 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
       ` : ''}
 
+      ${appgTortovoDeltaHasData ? `
+      <div class="card">
+        <p class="section-title">Тортово-кондитерские — АППГ месяц-к-месяцу, %</p>
+        <div class="chart-wrap"><canvas id="kondAppgTortovoDeltaChart"></canvas></div>
+      </div>
+      ` : ''}
+
       ${appgSaharistHasData ? `
       <div class="card">
         <p class="section-title">Сахаристые — АППГ по месяцам, тонн</p>
         <div class="chart-wrap"><canvas id="kondAppgSaharistChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${appgSaharistDeltaHasData ? `
+      <div class="card">
+        <p class="section-title">Сахаристые — АППГ месяц-к-месяцу, %</p>
+        <div class="chart-wrap"><canvas id="kondAppgSaharistDeltaChart"></canvas></div>
       </div>
       ` : ''}
 
@@ -1510,19 +1544,87 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
+    function barLineCombo(id, labels, barLabel, barData, lineLabel, lineData) {
+      const el = document.getElementById(id);
+      if (!el || typeof Chart === 'undefined') return;
+      new Chart(el, {
+        data: {
+          labels: labels,
+          datasets: [
+            { type: 'bar', label: barLabel, data: barData, backgroundColor: '#3a6df0', borderRadius: 4, yAxisID: 'y' },
+            { type: 'line', label: lineLabel, data: lineData, borderColor: '#e0693a', backgroundColor: '#e0693a', tension: 0.3, yAxisID: 'y1' }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+          scales: {
+            x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+            y: { position: 'left', ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
+            y1: { position: 'right', ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => v + '%' }, grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    function barTwoSeriesPct(id, labels, s1, s1data, s2, s2data) {
+      const el = document.getElementById(id);
+      if (!el || typeof Chart === 'undefined') return;
+      new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: s1, data: s1data, backgroundColor: '#3a6df0', borderRadius: 4 },
+            { label: s2, data: s2data, backgroundColor: '#e0693a', borderRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+          scales: {
+            x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => v + '%' }, grid: { color: '#eceef1' } }
+          }
+        }
+      });
+    }
+
+    function barSingleSeries(id, labels, label, data) {
+      const el = document.getElementById(id);
+      if (!el || typeof Chart === 'undefined') return;
+      new Chart(el, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: label, data: data, backgroundColor: '#3a6df0', borderRadius: 4 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => v + '%' }, grid: { color: '#eceef1' } }
+          }
+        }
+      });
+    }
+
     if (k.weeklyChart && k.weeklyChart.length) {
       barTwoSeries('kondTortovoChart', k.weeklyChart.map(w => w.week), 'План', k.weeklyChart.map(w => w.planTortovo), 'Факт', k.weeklyChart.map(w => w.factTortovo));
       barTwoSeries('kondSaharistChart', k.weeklyChart.map(w => w.week), 'План', k.weeklyChart.map(w => w.planSaharist), 'Факт', k.weeklyChart.map(w => w.factSaharist));
-      barTwoSeries('kondDeltaChart', k.weeklyChart.map(w => w.week), 'Тортово', k.weeklyChart.map(w => w.deltaTortovo), 'Сахаристые', k.weeklyChart.map(w => w.deltaSaharist));
+      barLineCombo('kondDevTortChart', k.weeklyChart.map(w => w.week), 'Факт торт.', k.weeklyChart.map(w => w.factTortovo), 'Откл. план/факт, %', k.weeklyChart.map(w => w.devTortovo));
+      barLineCombo('kondDevSaharChart', k.weeklyChart.map(w => w.week), 'Факт сахар.', k.weeklyChart.map(w => w.factSaharist), 'Откл. план/факт, %', k.weeklyChart.map(w => w.devSaharist));
+      barTwoSeriesPct('kondDeltaTortChart', k.weeklyChart.map(w => w.week), 'Δ Факт, %', k.weeklyChart.map(w => w.deltaTortovo), 'Δ План, %', k.weeklyChart.map(w => w.deltaPlanTortovo));
+      barTwoSeriesPct('kondDeltaSaharChart', k.weeklyChart.map(w => w.week), 'Δ Факт, %', k.weeklyChart.map(w => w.deltaSaharist), 'Δ План, %', k.weeklyChart.map(w => w.deltaPlanSaharist));
     }
     if (k.productsChart && k.productsChart.length) {
       barTwoSeries('kondProductsChart', k.productsChart.map(p => p.week), 'П/М', k.productsChart.map(p => p.pm), 'Мармелад', k.productsChart.map(p => p.marmelad));
     }
     if (k.appgTortovo && k.appgTortovo.length) {
       lineTwoSeries('kondAppgTortovoChart', k.appgTortovo.map(a => a.month), '2025', k.appgTortovo.map(a => a.year2025), '2026', k.appgTortovo.map(a => a.year2026));
+      barSingleSeries('kondAppgTortovoDeltaChart', k.appgTortovo.map(a => a.month), 'Δ к АППГ, %', k.appgTortovo.map(a => a.deltaPct));
     }
     if (k.appgSaharist && k.appgSaharist.length) {
       lineTwoSeries('kondAppgSaharistChart', k.appgSaharist.map(a => a.month), '2025', k.appgSaharist.map(a => a.year2025), '2026', k.appgSaharist.map(a => a.year2026));
+      barSingleSeries('kondAppgSaharistDeltaChart', k.appgSaharist.map(a => a.month), 'Δ к АППГ, %', k.appgSaharist.map(a => a.deltaPct));
     }
     const staffEl = document.getElementById('kondStaffChart');
     if (staffEl && k.staffChart && k.staffChart.length && typeof Chart !== 'undefined') {
