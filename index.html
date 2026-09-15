@@ -598,12 +598,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const w1 = bread.weeklyChart1 || [];
     const w2 = bread.weeklyChart2 || [];
+    const wd = bread.weeklyDev || [];
     const planFact1sHasData = w1.some(w => w.plan1s != null || w.fact1s != null);
     const planFactDarnHasData = w1.some(w => w.planDarn != null || w.factDarn != null);
     const planFactMshHasData = w2.some(w => w.planMsh != null || w.factMsh != null);
     const planFactRondoHasData = w2.some(w => w.planRondo != null || w.factRondo != null);
-    const delta1HasData = w1.some(w => w.delta1s != null || w.deltaDarn != null);
-    const delta2HasData = w2.some(w => w.deltaMsh != null || w.deltaRondo != null);
+    const delta1HasData = w1.some(w => w.delta1s != null || w.deltaDarn != null) || wd.some(w => w.deltaPlan1s != null || w.deltaPlanDarn != null);
+    const delta2HasData = w2.some(w => w.deltaMsh != null || w.deltaRondo != null) || wd.some(w => w.deltaPlanMsh != null || w.deltaPlanRondo != null);
+    const dev1sHasData = wd.some(w => w.dev1s != null);
+    const devDarnHasData = wd.some(w => w.devDarn != null);
+    const devMshHasData = wd.some(w => w.devMsh != null);
+    const devRondoHasData = wd.some(w => w.devRondo != null);
 
     return `
       ${bread.period ? `<p class="date" style="margin:-4px 0 12px">${bread.period}</p>` : ''}
@@ -616,10 +621,24 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
       ` : ''}
 
+      ${dev1sHasData ? `
+      <div class="card">
+        <p class="section-title">1 сорт — факт и отклонение план/факт, %</p>
+        <div class="chart-wrap"><canvas id="breadDev1sChart"></canvas></div>
+      </div>
+      ` : ''}
+
       ${planFactDarnHasData ? `
       <div class="card">
         <p class="section-title">Дарницкий — план/факт по неделям, шт</p>
         <div class="chart-wrap"><canvas id="breadDarnChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${devDarnHasData ? `
+      <div class="card">
+        <p class="section-title">Дарницкий — факт и отклонение план/факт, %</p>
+        <div class="chart-wrap"><canvas id="breadDevDarnChart"></canvas></div>
       </div>
       ` : ''}
 
@@ -630,10 +649,24 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
       ` : ''}
 
+      ${devMshHasData ? `
+      <div class="card">
+        <p class="section-title">МШ+пр.хлеба — факт и отклонение план/факт, %</p>
+        <div class="chart-wrap"><canvas id="breadDevMshChart"></canvas></div>
+      </div>
+      ` : ''}
+
       ${planFactRondoHasData ? `
       <div class="card">
         <p class="section-title">Рондо — план/факт по неделям, кг</p>
         <div class="chart-wrap"><canvas id="breadRondoChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${devRondoHasData ? `
+      <div class="card">
+        <p class="section-title">Рондо — факт и отклонение план/факт, %</p>
+        <div class="chart-wrap"><canvas id="breadDevRondoChart"></canvas></div>
       </div>
       ` : ''}
 
@@ -681,18 +714,112 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
+    function barLineCombo(id, labels, barLabel, barData, lineLabel, lineData) {
+      try {
+        const el = document.getElementById(id);
+        if (!el || typeof Chart === 'undefined') return;
+        new Chart(el, {
+          data: {
+            labels: labels,
+            datasets: [
+              { type: 'bar', label: barLabel, data: barData, backgroundColor: '#3a6df0', borderRadius: 4, yAxisID: 'y' },
+              { type: 'line', label: lineLabel, data: lineData, borderColor: '#e0693a', backgroundColor: '#e0693a', tension: 0.3, yAxisID: 'y1' }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { position: 'left', ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
+              y1: { position: 'right', ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => v + '%' }, grid: { display: false } }
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Ошибка отрисовки графика ' + id + ':', e);
+      }
+    }
+
+    function barTwoSeriesPct(id, labels, s1, s1data, s2, s2data) {
+      try {
+        const el = document.getElementById(id);
+        if (!el || typeof Chart === 'undefined') return;
+        new Chart(el, {
+          type: 'bar',
+          data: { labels: labels, datasets: [
+            { label: s1, data: s1data, backgroundColor: '#3a6df0', borderRadius: 4 },
+            { label: s2, data: s2data, backgroundColor: '#e0693a', borderRadius: 4 }
+          ] },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => v + '%' }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Ошибка отрисовки графика ' + id + ':', e);
+      }
+    }
+
+    function barFourSeries(id, labels, series) {
+      try {
+        const el = document.getElementById(id);
+        if (!el || typeof Chart === 'undefined') return;
+        const colors = ['#3a6df0', '#e0693a', '#9bbc59', '#8064a2'];
+        new Chart(el, {
+          type: 'bar',
+          data: { labels: labels, datasets: series.map((s, i) => ({ label: s.label, data: s.data, backgroundColor: colors[i], borderRadius: 4 })) },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            scales: {
+              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+              y: { ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => v + '%' }, grid: { color: '#eceef1' } }
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Ошибка отрисовки графика ' + id + ':', e);
+      }
+    }
+
     const w1 = bread.weeklyChart1 || [];
     const w2 = bread.weeklyChart2 || [];
+    const wd = bread.weeklyDev || [];
 
     if (w1.length) {
       barTwoSeries('bread1sChart', w1.map(w => w.week), 'План', w1.map(w => w.plan1s), 'Факт', w1.map(w => w.fact1s));
       barTwoSeries('breadDarnChart', w1.map(w => w.week), 'План', w1.map(w => w.planDarn), 'Факт', w1.map(w => w.factDarn));
-      barTwoSeries('breadDelta1Chart', w1.map(w => w.week), '1 сорт', w1.map(w => w.delta1s == null ? null : round1(w.delta1s * 100)), 'Дарницкий', w1.map(w => w.deltaDarn == null ? null : round1(w.deltaDarn * 100)));
     }
     if (w2.length) {
       barTwoSeries('breadMshChart', w2.map(w => w.week), 'План', w2.map(w => w.planMsh), 'Факт', w2.map(w => w.factMsh));
       barTwoSeries('breadRondoChart', w2.map(w => w.week), 'План', w2.map(w => w.planRondo), 'Факт', w2.map(w => w.factRondo));
-      barTwoSeries('breadDelta2Chart', w2.map(w => w.week), 'МШ+пр.хлеба', w2.map(w => w.deltaMsh == null ? null : round1(w.deltaMsh * 100)), 'Рондо', w2.map(w => w.deltaRondo == null ? null : round1(w.deltaRondo * 100)));
+    }
+    if (wd.length) {
+      if (w1.length) {
+        barLineCombo('breadDev1sChart', wd.map(w => w.week), 'Факт 1 сорт', w1.map(w => w.fact1s), 'Откл. план/факт, %', wd.map(w => w.dev1s));
+        barLineCombo('breadDevDarnChart', wd.map(w => w.week), 'Факт Дарницкий', w1.map(w => w.factDarn), 'Откл. план/факт, %', wd.map(w => w.devDarn));
+      }
+      if (w2.length) {
+        barLineCombo('breadDevMshChart', wd.map(w => w.week), 'Факт МШ', w2.map(w => w.factMsh), 'Откл. план/факт, %', wd.map(w => w.devMsh));
+        barLineCombo('breadDevRondoChart', wd.map(w => w.week), 'Факт Рондо', w2.map(w => w.factRondo), 'Откл. план/факт, %', wd.map(w => w.devRondo));
+      }
+      barFourSeries('breadDelta1Chart', wd.map(w => w.week), [
+        { label: 'Δ Факт 1 сорт, %', data: w1.map(w => w.delta1s == null ? null : round1(w.delta1s * 100)) },
+        { label: 'Δ Факт Дарницкий, %', data: w1.map(w => w.deltaDarn == null ? null : round1(w.deltaDarn * 100)) },
+        { label: 'Δ План 1 сорт, %', data: wd.map(w => w.deltaPlan1s) },
+        { label: 'Δ План Дарницкий, %', data: wd.map(w => w.deltaPlanDarn) }
+      ]);
+      barFourSeries('breadDelta2Chart', wd.map(w => w.week), [
+        { label: 'Δ Факт МШ, %', data: w2.map(w => w.deltaMsh == null ? null : round1(w.deltaMsh * 100)) },
+        { label: 'Δ Факт Рондо, %', data: w2.map(w => w.deltaRondo == null ? null : round1(w.deltaRondo * 100)) },
+        { label: 'Δ План МШ, %', data: wd.map(w => w.deltaPlanMsh) },
+        { label: 'Δ План Рондо, %', data: wd.map(w => w.deltaPlanRondo) }
+      ]);
     }
   }
 
