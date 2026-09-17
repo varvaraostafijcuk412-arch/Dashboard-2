@@ -169,13 +169,18 @@ document.addEventListener('DOMContentLoaded', function () {
  
   const TABS = [
     { key: 'summary', label: 'Сводка' },
-    { key: 'hr', label: 'Отдел кадров' },
-    { key: 'bread', label: 'Хлебный цех' },
-    { key: 'omts', label: 'ОМТС' },
-    { key: 'marketing', label: 'Маркетинг' },
-    { key: 'feo', label: 'ФЭО' },
     { key: 'konditerka', label: 'Кондитерский цех' },
-    { key: 'atc', label: 'АТЦ' }
+    { key: 'bread', label: 'Хлебный цех' },
+    { key: 'kachestvo', label: 'Качество' },
+    { key: 'atc', label: 'АТЦ' },
+    { key: 'tech_sluzhby', label: 'Технические службы' },
+    { key: 'sbyt', label: 'Сбыт' },
+    { key: 'fts', label: 'ФТС' },
+    { key: 'marketing', label: 'Маркетинговая служба' },
+    { key: 'omts', label: 'ОМТС' },
+    { key: 'feo', label: 'ФЭО' },
+    { key: 'hr', label: 'Отдел кадров' },
+    { key: 'ot_tb', label: 'ОТ и ТБ' }
   ];
  
   let DATA = null;
@@ -232,6 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'feo') { main.innerHTML = renderFEO(DATA.feo); if (DATA.feo && !DATA.feo.error) drawFEOCharts(DATA.feo); return; }
     if (key === 'konditerka') { main.innerHTML = renderKonditerka(DATA.konditerka); if (DATA.konditerka && !DATA.konditerka.error) drawKonditerkaCharts(DATA.konditerka); return; }
     if (key === 'atc') { main.innerHTML = renderATC(DATA.atc); if (DATA.atc && !DATA.atc.error) drawATCCharts(DATA.atc); return; }
+    if (['kachestvo','tech_sluzhby','sbyt','ot_tb'].includes(key)) { main.innerHTML = renderPlaceholder(TABS.find(t => t.key === key).label); return; }
   }
  
   function goTab(key) {
@@ -247,26 +253,25 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderSummary() {
     let html = '';
 
-    if (DATA.hr && !DATA.hr.error) {
-      const turnover = DATA.hr.kpis[0];
-      const staffed = DATA.hr.kpis[1];
+    if (DATA.konditerka && !DATA.konditerka.error) {
+      const tortovo = DATA.konditerka.kpis[0];
+      const saharist = DATA.konditerka.kpis[1];
       html += `
-        <div class="summary-card" data-goto="hr">
-          <div class="summary-top">${DATA.hr.icon} ${DATA.hr.label} <span class="chev">›</span></div>
+        <div class="summary-card" data-goto="konditerka">
+          <div class="summary-top">${DATA.konditerka.icon} ${DATA.konditerka.label} <span class="chev">›</span></div>
           <div class="summary-grid">
             <div class="summary-metric">
-              <div class="label">${turnover.label}</div>
-              <div class="value">${turnover.value}</div>
-              ${badgeHtml(turnover)}
+              <div class="label">${tortovo.label}</div>
+              <div class="value">${tortovo.value}</div>
             </div>
             <div class="summary-metric">
-              <div class="label">${staffed.label}</div>
-              <div class="value">${staffed.value}</div>
+              <div class="label">${saharist.label}</div>
+              <div class="value">${saharist.value}</div>
             </div>
           </div>
         </div>`;
     }
- 
+
     if (DATA.bread && !DATA.bread.error) {
       const g1 = DATA.bread.kpis[0];
       const g2 = DATA.bread.kpis[1];
@@ -285,21 +290,21 @@ document.addEventListener('DOMContentLoaded', function () {
           </div>
         </div>`;
     }
- 
-    if (DATA.omts && !DATA.omts.error) {
-      const total = DATA.omts.kpis[0];
-      const deficit = DATA.omts.kpis[3];
+
+    if (DATA.atc && !DATA.atc.error) {
+      const plan = DATA.atc.kpis[0];
+      const prostoy = DATA.atc.kpis[1];
       html += `
-        <div class="summary-card" data-goto="omts">
-          <div class="summary-top">${DATA.omts.icon} ${DATA.omts.label} <span class="chev">›</span></div>
+        <div class="summary-card" data-goto="atc">
+          <div class="summary-top">${DATA.atc.icon} ${DATA.atc.label} <span class="chev">›</span></div>
           <div class="summary-grid">
             <div class="summary-metric">
-              <div class="label">${total.label}</div>
-              <div class="value">${total.value}</div>
+              <div class="label">${plan.label}</div>
+              <div class="value">${plan.value}</div>
             </div>
             <div class="summary-metric">
-              <div class="label">${deficit.label}</div>
-              <div class="value">${deficit.value}</div>
+              <div class="label">${prostoy.label}</div>
+              <div class="value">${prostoy.value}</div>
             </div>
           </div>
         </div>`;
@@ -324,6 +329,25 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>`;
     }
 
+    if (DATA.omts && !DATA.omts.error) {
+      const total = DATA.omts.kpis[0];
+      const deficit = DATA.omts.kpis[3];
+      html += `
+        <div class="summary-card" data-goto="omts">
+          <div class="summary-top">${DATA.omts.icon} ${DATA.omts.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${total.label}</div>
+              <div class="value">${total.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${deficit.label}</div>
+              <div class="value">${deficit.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
     if (DATA.feo && !DATA.feo.error) {
       const receipts = DATA.feo.kpis[0];
       const revenue = DATA.feo.kpis[1];
@@ -343,39 +367,21 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>`;
     }
 
-    if (DATA.konditerka && !DATA.konditerka.error) {
-      const tortovo = DATA.konditerka.kpis[0];
-      const saharist = DATA.konditerka.kpis[1];
+    if (DATA.hr && !DATA.hr.error) {
+      const turnover = DATA.hr.kpis[0];
+      const staffed = DATA.hr.kpis[1];
       html += `
-        <div class="summary-card" data-goto="konditerka">
-          <div class="summary-top">${DATA.konditerka.icon} ${DATA.konditerka.label} <span class="chev">›</span></div>
+        <div class="summary-card" data-goto="hr">
+          <div class="summary-top">${DATA.hr.icon} ${DATA.hr.label} <span class="chev">›</span></div>
           <div class="summary-grid">
             <div class="summary-metric">
-              <div class="label">${tortovo.label}</div>
-              <div class="value">${tortovo.value}</div>
+              <div class="label">${turnover.label}</div>
+              <div class="value">${turnover.value}</div>
+              ${badgeHtml(turnover)}
             </div>
             <div class="summary-metric">
-              <div class="label">${saharist.label}</div>
-              <div class="value">${saharist.value}</div>
-            </div>
-          </div>
-        </div>`;
-    }
-
-    if (DATA.atc && !DATA.atc.error) {
-      const plan = DATA.atc.kpis[0];
-      const prostoy = DATA.atc.kpis[1];
-      html += `
-        <div class="summary-card" data-goto="atc">
-          <div class="summary-top">${DATA.atc.icon} ${DATA.atc.label} <span class="chev">›</span></div>
-          <div class="summary-grid">
-            <div class="summary-metric">
-              <div class="label">${plan.label}</div>
-              <div class="value">${plan.value}</div>
-            </div>
-            <div class="summary-metric">
-              <div class="label">${prostoy.label}</div>
-              <div class="value">${prostoy.value}</div>
+              <div class="label">${staffed.label}</div>
+              <div class="value">${staffed.value}</div>
             </div>
           </div>
         </div>`;
@@ -1772,6 +1778,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       });
     }
+  }
+
+  function renderPlaceholder(label) {
+    return `
+      <div class="card" style="text-align:center; padding:40px 20px;">
+        <p style="font-size:15px; color:#8a8d93; margin:0 0 4px">${label}</p>
+        <p style="font-size:13px; color:#b0b3b8; margin:0">Раздел в разработке — данные появятся позже</p>
+      </div>
+    `;
   }
 
   function renderATC(atc) {
