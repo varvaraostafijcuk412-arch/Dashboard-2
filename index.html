@@ -987,10 +987,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const breadChangeHasData = (mkt.breadChangeChart || []).some(c => c.pct != null);
     const conversionHasData = mkt.conversionChart && mkt.conversionChart.shops && mkt.conversionChart.shops.some(s => s.week1 != null || s.week2 != null);
-    const breadTopHasData = mkt.breadTopChart && (((mkt.breadTopChart.growth || []).length) || ((mkt.breadTopChart.decline || []).length));
     const retailHasData = (mkt.retailChangeChart || []).some(c => c.pct != null);
     const noveltiesHasData = (mkt.noveltiesChart || []).length > 0;
     const gisHasData = mkt.reviews2gisChart && mkt.reviews2gisChart.metrics && mkt.reviews2gisChart.metrics.length > 0;
+    const socSkidkiHasData = mkt.socSkidkiChart && mkt.socSkidkiChart.total != null;
 
     return `
       ${mkt.period ? `<p class="date" style="margin:-4px 0 12px">${mkt.period}</p>` : ''}
@@ -1003,17 +1003,18 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
       ` : ''}
 
+      ${socSkidkiHasData ? `
+        <div class="card">
+          <p class="section-title">Соц. скидки — количество чеков за неделю</p>
+          <div class="kpi-value" style="font-size:24px">${mkt.socSkidkiChart.total}</div>
+          ${mkt.socSkidkiChart.pct != null ? `<span class="badge ${mkt.socSkidkiChart.pct >= 0 ? 'good' : 'bad'}">${mkt.socSkidkiChart.pct >= 0 ? '+' : ''}${mkt.socSkidkiChart.pct}% к пред. неделе</span>` : `<span class="badge nodata">нет данных за пред. неделю</span>`}
+        </div>
+      ` : ''}
+
       ${conversionHasData ? `
       <div class="card">
         <p class="section-title">Конверсия по магазинам, %</p>
         <div class="chart-wrap"><canvas id="mktConversionChart"></canvas></div>
-      </div>
-      ` : ''}
-
-      ${breadTopHasData ? `
-      <div class="card">
-        <p class="section-title">Батон нарезной — топ каналов, откл. шт</p>
-        <div class="chart-wrap" style="height:280px"><canvas id="mktBreadTopChart"></canvas></div>
       </div>
       ` : ''}
 
@@ -1073,38 +1074,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
           }
         });
-      }
-    }
-
-    const topEl = document.getElementById('mktBreadTopChart');
-    if (topEl && mkt.breadTopChart) {
-      const combined = (mkt.breadTopChart.growth || []).concat(mkt.breadTopChart.decline || []);
-      if (combined.length) {
-        if (typeof Chart === 'undefined') {
-          topEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
-        } else {
-          new Chart(topEl, {
-            type: 'bar',
-            data: {
-              labels: combined.map(c => c.name),
-              datasets: [{
-                data: combined.map(c => c.value),
-                backgroundColor: combined.map(c => c.value >= 0 ? '#22a854' : '#d24b3a'),
-                borderRadius: 4
-              }]
-            },
-            options: {
-              indexAxis: 'y',
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
-                y: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } }
-              }
-            }
-          });
-        }
       }
     }
 
