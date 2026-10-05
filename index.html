@@ -986,14 +986,20 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderMarketing(mkt) {
     if (!mkt || mkt.error) return `<div class="empty-dept">Таблица маркетинга недоступна</div>`;
 
-    const kpiCards = mkt.kpis.map(k => `
-      <div class="kpi" onclick="this.classList.toggle('open')">
-        <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
+    // Маркетинг: плана нет, поэтому под каждым показателем показываем динамику к пред. неделе
+    // (из заметки строки 7 дашборда), а не «выше плана / план выполнен».
+    const kpiCards = mkt.kpis.map(k => {
+      const note = (k.note || '').trim();
+      const dyn = k.badge
+        ? `<span class="badge ${k.status === 'good' ? 'good' : (k.status === 'bad' ? 'bad' : 'nodata')}">${k.status === 'good' ? '▲' : (k.status === 'bad' ? '▼' : '')} ${k.badge}</span>`
+        : (note ? `<div style="font-size:13px;color:var(--dim);margin-top:6px">${note}</div>` : '');
+      return `
+      <div class="kpi">
+        <div class="kpi-top"><span class="kpi-label">${k.label}</span></div>
         <div class="kpi-value">${k.value}</div>
-        ${badgeHtml(k)}
-        <div class="kpi-detail">${kpiDetail(k)}</div>
-      </div>
-    `).join('');
+        ${dyn}
+      </div>`;
+    }).join('');
 
     const breadChangeHasData = (mkt.breadChangeChart || []).some(c => c.pct != null);
     const conversionHasData = mkt.conversionChart && mkt.conversionChart.shops && mkt.conversionChart.shops.some(s => s.week1 != null || s.week2 != null);
@@ -1005,13 +1011,6 @@ document.addEventListener('DOMContentLoaded', function () {
     return `
       ${mkt.period ? `<p class="date" style="margin:-4px 0 12px">${mkt.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
-      ${mkt.productOfWeek ? `
-        <div class="card" style="background:#fff8e1;border:1px solid #f0d68a">
-          <p class="section-title" style="color:#8a6d00">⭐ Товар недели: ${mkt.productOfWeek.name}</p>
-          <div class="kpi-value" style="font-size:20px">${mkt.productOfWeek.current}${mkt.productOfWeek.previous != null ? ` <span style="font-size:13px;color:var(--dim);font-weight:400">(было ${mkt.productOfWeek.previous})</span>` : ''}</div>
-          ${mkt.productOfWeek.pct != null ? `<span class="badge ${mkt.productOfWeek.pct >= 0 ? 'good' : 'bad'}">${mkt.productOfWeek.pct >= 0 ? '+' : ''}${mkt.productOfWeek.pct}% к пред. неделе</span>` : ''}
-        </div>
-      ` : ''}
 
       ${socSkidkiHasData ? `
         <div class="card">
