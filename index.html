@@ -71,9 +71,11 @@
   .kpi-value{ font-family:var(--font-display); font-weight:800; font-size:26px; margin:8px 0 8px; letter-spacing:-0.01em; }
   .kpi{ cursor:default; }
   .kpi-detail{
-    display:block; margin-top:8px; padding-top:8px;
-    border-top:1px solid var(--line); font-size:12px; color:var(--dim); line-height:1.5;
+    display:block; margin-top:2px;
+    font-size:12.5px; color:var(--dim); line-height:1.5;
   }
+  .kpi-detail .badge{ margin-bottom:4px; }
+  .kpi-detail .kpi-note{ margin-top:2px; }
   .kpi-detail:empty{ display:none; }
   .badge{
     display:inline-block; font-size:11.5px; font-weight:700;
@@ -248,7 +250,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'feo') { main.innerHTML = renderFEO(DATA.feo); if (DATA.feo && !DATA.feo.error) drawFEOCharts(DATA.feo); return; }
     if (key === 'konditerka') { main.innerHTML = renderKonditerka(DATA.konditerka); if (DATA.konditerka && !DATA.konditerka.error) drawKonditerkaCharts(DATA.konditerka); return; }
     if (key === 'atc') { main.innerHTML = renderATC(DATA.atc); if (DATA.atc && !DATA.atc.error) drawATCCharts(DATA.atc); return; }
-    if (['kachestvo','tech_sluzhby','sbyt','ot_tb'].includes(key)) { main.innerHTML = renderPlaceholder(TABS.find(t => t.key === key).label); return; }
+    if (key === 'ot_tb') { main.innerHTML = renderOT(DATA.ot); if (DATA.ot && !DATA.ot.error) drawOTCharts(DATA.ot); return; }
+    if (['kachestvo','tech_sluzhby','sbyt'].includes(key)) { main.innerHTML = renderPlaceholder(TABS.find(t => t.key === key).label); return; }
   }
  
   function goTab(key) {
@@ -398,6 +401,26 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>`;
     }
 
+    if (DATA.ot && !DATA.ot.error) {
+      const ns = DATA.ot.kpis[0];
+      const viol = DATA.ot.kpis[4];
+      html += `
+        <div class="summary-card" data-goto="ot_tb">
+          <div class="summary-top">${DATA.ot.icon} ${DATA.ot.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${ns.label}</div>
+              <div class="value">${ns.value}</div>
+              ${badgeHtml(ns)}
+            </div>
+            <div class="summary-metric">
+              <div class="label">${viol.label}</div>
+              <div class="value">${viol.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
     return html || '<div class="empty-dept">Нет данных</div>';
   }
  
@@ -417,14 +440,28 @@ document.addEventListener('DOMContentLoaded', function () {
  
   // Под каждой карточкой сразу видна заметка из таблицы (план, динамика к пред. неделе и т.п.).
   // Общие фразы показываем, только если заметки в таблице нет.
+  // Как в маркетинге: динамика из заметки («Δ -1,5% к пред. неделе», «+45,6% к плану» и т.п.)
+  // выводится цветным бейджем со стрелкой (▲ рост — зелёный, ▼ падение — красный),
+  // остальной текст заметки (план, итого и т.п.) — мелкой строкой под бейджем.
   function kpiDetail(kpi) {
     if (!kpi) return '';
     const note = String(kpi.note || '').trim();
-    if (note) return note;
-    if (kpi.status === 'nodata' || /нет данных/i.test(kpi.value || '')) {
-      return 'В таблице пока нет значения по этому показателю за текущий период.';
+    if (!note) {
+      return (kpi.status === 'nodata' || /нет данных/i.test(kpi.value || ''))
+        ? '<div class="kpi-note">В таблице пока нет значения по этому показателю за текущий период.</div>' : '';
     }
-    return '';
+    const parts = note.split(/\s*[·|•]\s*/).map(s => s.trim()).filter(Boolean);
+    const badges = [], texts = [];
+    parts.forEach(seg => {
+      const m = seg.match(/^(?:Δ|изменение)?\s*([+\-−–])\s*(\d[\d\s]*(?:[.,]\d+)?\s*%?(?:\s*п\.п\.)?)\s*(к\s.+)$/i);
+      if (m) {
+        const up = m[1] === '+';
+        badges.push(`<span class="badge ${up ? 'good' : 'bad'}">${up ? '▲ +' : '▼ −'}${m[2].trim()} ${m[3]}</span>`);
+      } else {
+        texts.push(seg);
+      }
+    });
+    return badges.join('') + (texts.length ? `<div class="kpi-note">${texts.join(' · ')}</div>` : '');
   }
  
   function renderHR(hr) {
@@ -1770,6 +1807,49 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       });
     }
+  }
+
+  // ---------- Охрана труда и промбезопасность ----------
+  function renderOT(ot) {
+    if (!ot || ot.error) return `<div class="empty-dept">Таблица охраны труда недоступна</div>`;
+    const kpiCards = ot.kpis.map(k => `
+      <div class="kpi">
+        <div class="kpi-top"><span class="kpi-label">${k.label}</span></div>
+        <div class="kpi-value">${k.value}</div>
+        ${badgeHtml(k)}
+        <div class="kpi-detail">${kpiDetail(k)}</div>
+      </div>`).join('');
+    const hasWeekly = ot.weekly && ot.weekly.length;
+    return `
+      ${ot.period ? `<p class="date" style="margin:-4px 0 12px">${ot.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+      ${hasWeekly ? `
+      <div class="card">
+        <p class="section-title">Инструктажи и обучение по неделям, чел</p>
+        <div class="chart-wrap"><canvas id="otTrainChart"></canvas></div>
+      </div>
+      <div class="card">
+        <p class="section-title">Нарушения и происшествия по неделям, шт</p>
+        <div class="chart-wrap"><canvas id="otIncChart"></canvas></div>
+      </div>` : ''}
+    `;
+  }
+
+  function drawOTCharts(ot) {
+    const w = ot.weekly || [];
+    if (!w.length) return;
+    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } },
+                   scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } };
+    const el1 = document.getElementById('otTrainChart');
+    if (el1) new Chart(el1, { type: 'bar', options: opts, data: { labels: w.map(x => x.week), datasets: [
+      { label: 'Инструктажи', data: w.map(x => x.instr), backgroundColor: '#3a6df0', borderRadius: 4 },
+      { label: 'Обучение', data: w.map(x => x.training), backgroundColor: '#8fb0ff', borderRadius: 4 } ] } });
+    const el2 = document.getElementById('otIncChart');
+    if (el2) new Chart(el2, { type: 'bar', options: opts, data: { labels: w.map(x => x.week), datasets: [
+      { label: 'Нарушения', data: w.map(x => x.violations), backgroundColor: '#f0a33a', borderRadius: 4 },
+      { label: 'Несчастные случаи', data: w.map(x => x.accidents), backgroundColor: '#e5484d', borderRadius: 4 },
+      { label: 'Аварии', data: w.map(x => x.breakdowns), backgroundColor: '#9b59b6', borderRadius: 4 },
+      { label: 'Пожары', data: w.map(x => x.fires), backgroundColor: '#5a6270', borderRadius: 4 } ] } });
   }
 
   function renderPlaceholder(label) {
