@@ -977,14 +977,21 @@ document.addEventListener('DOMContentLoaded', function () {
           data: {
             labels: omts.mukaChart.map(m => m.name),
             datasets: [
-              { label: 'Факт', data: omts.mukaChart.map(m => m.fact), backgroundColor: '#3a6df0', borderRadius: 4 },
-              { label: 'Норматив', data: omts.mukaChart.map(m => m.norm), backgroundColor: '#c7c9cf', borderRadius: 4 }
+              // Норматив — горизонтальная черта поверх столбика: сразу видно, выше факт нормы или ниже
+              {
+                type: 'line', label: 'Норматив', data: omts.mukaChart.map(m => m.norm), order: 0,
+                showLine: false, pointStyle: 'line', borderColor: '#d64545', backgroundColor: '#d64545', borderWidth: 3,
+                pointRadius: (c) => { const a = c.chart.chartArea; return a ? Math.max(14, a.width / c.chart.data.labels.length * 0.3) : 24; },
+                pointHoverRadius: (c) => { const a = c.chart.chartArea; return a ? Math.max(14, a.width / c.chart.data.labels.length * 0.3) : 24; },
+                pointHoverBorderWidth: 4
+              },
+              { label: 'Факт', data: omts.mukaChart.map(m => m.fact), backgroundColor: '#3a6df0', borderRadius: 4, order: 1, maxBarThickness: 120, categoryPercentage: 0.7, barPercentage: 0.9 }
             ]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, usePointStyle: true, font: { size: 10 }, color: '#8a8d93' } } },
             scales: {
               x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
               y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
@@ -1427,34 +1434,45 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // Реализация мероприятий по оптимизации затрат — по отделам (все отделы, не только ФЭО)
+  // Реализация мероприятий по оптимизации затрат — по отделам (все отделы, не только ФЭО).
+  // Сначала видна одна строка «Итого по комбинату»; по нажатию раскрываются плитки отделов
+  // (в стиле карточек показателей, отделы с самым низким процентом — первыми).
   function feoOptimHtml(o) {
     if (!o || !o.rows || !o.rows.length) return '';
-    const deltaBadge = (t) => {
+    const fmt = (x) => x.pct == null ? '—' : String(Math.round(x.pct)) + '%';
+    const cls = (x) => { const p = x.pct == null ? 0 : x.pct; return p >= 90 ? 'good' : (p >= 50 ? 'nodata' : 'bad'); };
+    const col = (x) => ({ good: '#2e9e5b', nodata: '#e0a800', bad: '#d64545' })[cls(x)];
+    const delta = (t) => {
       if (!t || t === '—' || t === '0') return '';
       const up = t.trim().charAt(0) === '+';
-      return `<span class="badge ${up ? 'good' : 'bad'}" style="margin:0 0 0 6px">${up ? '▲' : '▼'} ${t.replace(/^[+\-−–]\s*/, '')}</span>`;
+      return `<span class="badge ${up ? 'good' : 'bad'}">${up ? '▲' : '▼'} ${t.replace(/^[+\-−–]\s*/, '')} к пред. неделе</span>`;
     };
-    const line = (x, bold) => {
-      const p = x.pct == null ? 0 : x.pct;
-      const color = p >= 90 ? '#2e9e5b' : (p >= 50 ? '#e0a800' : '#d64545');
-      return `
-        <div style="margin:0 0 11px">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;${bold ? 'font-weight:700' : ''}">
-            <span>${x.dept}</span>
-            <span style="white-space:nowrap">${x.pct == null ? '—' : String(x.pct).replace('.', ',') + '%'}${deltaBadge(x.delta)}</span>
-          </div>
-          <div style="height:7px;background:#eceef1;border-radius:4px;margin:4px 0 3px;overflow:hidden">
-            <div style="height:100%;width:${Math.max(0, Math.min(100, p))}%;background:${color};border-radius:4px"></div>
-          </div>
-          <div class="kpi-note">выполнено ${x.done} из ${x.total}${x.partial ? ' · частично ' + x.partial : ''}${x.notStarted ? ' · не начато ' + x.notStarted : ''}</div>
-        </div>`;
-    };
+    const bar = (x) => `<div style="height:5px;background:#eceef1;border-radius:3px;overflow:hidden;margin:0 0 9px"><div style="height:100%;width:${Math.max(0, Math.min(100, x.pct || 0))}%;background:${col(x)}"></div></div>`;
+    const tile = (x) => `
+      <div class="kpi">
+        <div class="kpi-top"><span class="kpi-label">${x.dept}</span></div>
+        <div class="kpi-value">${fmt(x)}</div>
+        ${bar(x)}
+        <span class="badge ${cls(x)}">${x.done} из ${x.total}</span>${delta(x.delta)}
+        ${x.notStarted ? `<div class="kpi-note" style="margin-top:5px">не начато: ${x.notStarted}</div>` : ''}
+      </div>`;
+    const t = o.total;
     return `
-      <div class="card">
-        <p class="section-title">Реализация мероприятий по оптимизации затрат — по отделам</p>
-        ${o.total ? line(Object.assign({}, o.total, { dept: 'Итого по комбинату' }), true) + '<div style="border-top:1px solid #eceef1;margin:0 0 11px"></div>' : ''}
-        ${o.rows.slice().sort((a, b) => (a.pct == null ? 0 : a.pct) - (b.pct == null ? 0 : b.pct)).map(x => line(x, false)).join('')}
+      <p class="section-title" style="margin:6px 2px 10px">Оптимизация затрат — реализация мероприятий по отделам</p>
+      ${t ? `
+      <div class="card" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;cursor:pointer"
+           onclick="const g=this.nextElementSibling,op=g.style.display==='none';g.style.display=op?'grid':'none';this.querySelector('.opt-more').textContent=op?'Свернуть ▴':'По отделам ▾'">
+        <div style="font-family:var(--font-display);font-weight:800;font-size:30px;line-height:1">${fmt(t)}</div>
+        <div style="flex:1;min-width:170px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px">Итого по комбинату</div>
+          ${bar(t)}
+          <div class="kpi-note">выполнено ${t.done} из ${t.total} · частично ${t.partial} · не начато ${t.notStarted}</div>
+        </div>
+        ${delta(t.delta)}
+        <span class="opt-more" style="font-size:13px;font-weight:600;color:var(--accent);white-space:nowrap">По отделам ▾</span>
+      </div>` : ''}
+      <div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));display:${t ? 'none' : 'grid'}">
+        ${o.rows.slice().sort((a, b) => (a.pct == null ? 0 : a.pct) - (b.pct == null ? 0 : b.pct)).map(tile).join('')}
       </div>`;
   }
 
