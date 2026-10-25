@@ -1937,64 +1937,59 @@ document.addEventListener('DOMContentLoaded', function () {
         ${badgeHtml(kp)}
         <div class="kpi-note" style="margin-top:4px">${qNoteHtml(kp.note)}</div>
       </div>`).join('');
+    const acc = (title, body) => `
+      <div class="card acc">
+        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
+          <span>${title}</span><span class="acc-chev">›</span>
+        </p>
+        <div class="acc-body">${body}</div>
+      </div>`;
+    const table = (head, rows) => `<table class="groups"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
 
     const shopRows = (q.shops || []).filter(s => s.share !== null).map(s => `
       <tr><td>${s.name}</td><td class="num">${qFmt(s.kg, 1)}</td><td class="num">${qFmt(s.share, 2)}%</td>
       <td class="num">${qDelta(s.dPp, 2, '')}</td><td class="num">${s.target !== null ? qFmt(s.target, 2) + '%' : ''}</td></tr>`).join('');
-
-    const compl = (q.complaints || []).filter(c => c.type === 'ВСЕГО' || c.now || c.prev || c.year);
-    const complRows = compl.map(c => `
+    const topRows = (q.top || []).map((t, i) => `
+      <tr><td>${i + 1}. ${t.reason}<br><span class="kpi-note">${t.shop}, ${t.kind}</span></td><td class="num">${qFmt(t.kg, 1)}</td>
+      <td class="num">${t.sharePct !== null ? t.sharePct + '%' : ''}</td><td class="num">${qDelta(t.devPrev, 0, '%')}</td></tr>`).join('');
+    const brigRows = (q.brigades || []).filter(b => b.share !== null).map(b => `
+      <tr><td>${b.name}<br><span class="kpi-note">${b.shop}</span></td><td class="num">${qFmt(b.zamKg, 1)}</td>
+      <td class="num">${qFmt(b.share, 2)}%</td><td class="num">${qDelta(b.dPp, 2, '')}</td><td class="num">${b.ball ?? ''}</td></tr>`).join('');
+    const defRows = (q.deformation || []).map(x => `
+      <tr${x.name === 'ИТОГО' ? ' style="font-weight:600"' : ''}><td>${x.name}</td><td class="num">${qFmt(x.kg, 1)}</td>
+      <td class="num">${qFmt(x.prevKg, 1)}</td><td class="num">${qDelta(x.d, 1, '')}</td></tr>`).join('');
+    const complRows = (q.complaints || []).filter(c => c.type === 'ВСЕГО' || c.now || c.prev || c.month).map(c => `
       <tr${c.type === 'ВСЕГО' ? ' style="font-weight:600"' : ''}><td>${c.type}</td><td class="num">${c.now ?? 0}</td>
-      <td class="num">${c.prev ?? 0}</td><td class="num">${c.month ?? 0}</td><td class="num">${c.year ?? 0}</td></tr>`).join('');
+      <td class="num">${c.prev ?? 0}</td><td class="num">${c.month ?? 0}</td></tr>`).join('');
 
-    const plan = (q.plan || []).filter(p => p.status !== 'Выполнено');
-    const planRows = plan.map(p => `
-      <tr${p.overdue ? ' style="background:#fdecec"' : ''}><td><b>${p.what}</b><br><span class="kpi-note">${p.how || ''}</span></td>
-      <td>${p.who || '—'}</td><td class="num">${p.due || '—'}${p.overdue ? '<br><span style="color:#e5484d">просрочено</span>' : ''}</td>
-      <td>${p.status || '—'}</td></tr>`).join('');
-
+    const mw = q.monthWeeks || [];
     const has = (arr, f) => arr && arr.some(f);
+    const mon = q.monthLabel ? ' — ' + q.monthLabel : '';
     return `
       ${q.period ? `<p class="date" style="margin:-4px 0 12px">${q.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
 
-      ${has(q.dynamics, d => d.hcBrak !== null || d.hcZam !== null || d.msZam !== null) ? `
-      <div class="card"><p class="section-title">Доля брака и замечаний по периодам, %</p>
+      ${has(mw, d => d.hcBrak !== null || d.hcZam !== null || d.msZam !== null) ? `
+      <div class="card"><p class="section-title">Доля брака и замечаний по неделям${mon}, %</p>
         <div class="chart-wrap"><canvas id="kachDynChart"></canvas></div></div>` : ''}
-
+      ${has(mw, d => d.defKg) ? `
+      <div class="card"><p class="section-title">Деформация по неделям${mon}, кг</p>
+        <div class="chart-wrap"><canvas id="kachDefChart"></canvas></div></div>` : ''}
+      ${has(mw, d => d.complaints) ? `
+      <div class="card"><p class="section-title">Жалобы по неделям${mon}, шт</p>
+        <div class="chart-wrap"><canvas id="kachComplChart"></canvas></div></div>` : ''}
       ${shopRows ? `
-      <div class="card"><p class="section-title">Брак и замечания по цехам</p>
-        <table class="groups"><thead><tr><th>Цех — показатель</th><th>кг</th><th>Доля</th><th>Δ п.п.</th><th>Цель</th></tr></thead><tbody>${shopRows}</tbody></table></div>
       <div class="card"><p class="section-title">Доля по цехам: этот и прошлый период, %</p>
         <div class="chart-wrap" style="height:300px"><canvas id="kachShopsChart"></canvas></div></div>` : ''}
-
-      ${has(q.top, t => t.kg) ? `
-      <div class="card"><p class="section-title">Топ причин за период, кг</p>
-        <div class="chart-wrap" style="height:240px"><canvas id="kachTopChart"></canvas></div></div>` : ''}
-
       ${has(q.brigades, b => b.share !== null) ? `
       <div class="card"><p class="section-title">Доля замечаний по бригадам, %</p>
         <div class="chart-wrap"><canvas id="kachBrigChart"></canvas></div></div>` : ''}
 
-      ${has(q.dynamics, d => d.defKg) ? `
-      <div class="card"><p class="section-title">Деформация по периодам, кг</p>
-        <div class="chart-wrap"><canvas id="kachDefChart"></canvas></div></div>` : ''}
-
-      ${complRows ? `
-      <div class="card"><p class="section-title">Жалобы, шт</p>
-        <table class="groups"><thead><tr><th>Вид</th><th>Период</th><th>Прошл.</th><th>Месяц</th><th>Год</th></tr></thead><tbody>${complRows}</tbody></table></div>` : ''}
-
-      ${has(q.complaintsMonthly, m => m.total) ? `
-      <div class="card"><p class="section-title">Жалобы по месяцам ${new Date().getFullYear()}, шт</p>
-        <div class="chart-wrap"><canvas id="kachComplChart"></canvas></div></div>` : ''}
-
-      ${q.summary && q.summary.length ? `
-      <div class="card"><p class="section-title">Резюме</p>
-        ${q.summary.map(s => `<p style="font-size:13px;margin:0 0 6px">• ${s}</p>`).join('')}</div>` : ''}
-
-      <div class="card"><p class="section-title">План работ — не выполнено</p>
-        ${planRows ? `<table class="groups"><thead><tr><th>Что устраняем / как</th><th>Кто</th><th>Срок</th><th>Статус</th></tr></thead><tbody>${planRows}</tbody></table>`
-                   : '<p class="kpi-note">Открытых пунктов нет.</p>'}</div>
+      ${shopRows ? acc('Брак и замечания по цехам', table(['Цех — показатель', 'кг', 'Доля', 'Δ п.п.', 'Цель'], shopRows)) : ''}
+      ${topRows ? acc('Топ-5 причин за период', table(['Причина', 'кг', 'Доля', 'Откл.'], topRows)) : ''}
+      ${brigRows ? acc('Бригады — замечания', table(['Бригада', 'кг', 'Доля', 'Δ п.п.', 'Балл'], brigRows)) : ''}
+      ${defRows ? acc('Деформация', table(['Где', 'кг', 'Прошл.', 'Δ'], defRows)) : ''}
+      ${complRows ? acc('Жалобы по видам', table(['Вид', 'Период', 'Прошл.', 'Месяц'], complRows)) : ''}
     `;
   }
 
@@ -2006,7 +2001,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     const legend = { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } };
     const mk = (id, cfg) => { const el = document.getElementById(id); if (el) new Chart(el, cfg); };
-    const dyn = q.dynamics || [];
+    const dyn = q.monthWeeks || [];
     mk('kachDynChart', { type: 'line', data: { labels: dyn.map(d => d.period), datasets: [
       { label: 'ХЦ: брак', data: dyn.map(d => d.hcBrak), borderColor: '#e5484d', backgroundColor: '#e5484d', tension: 0.3, spanGaps: true },
       { label: 'ХЦ: замечания', data: dyn.map(d => d.hcZam), borderColor: '#f5a524', backgroundColor: '#f5a524', tension: 0.3, spanGaps: true },
@@ -2019,13 +2014,6 @@ document.addEventListener('DOMContentLoaded', function () {
       options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend },
         scales: { x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => String(v).replace('.', ',') + '%' }, grid: { color: '#eceef1' } },
                   y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } } } });
-    const top = q.top || [];
-    mk('kachTopChart', { type: 'bar', data: { labels: top.map(t => t.reason + ' (' + t.shop + ')'), datasets: [
-      { label: 'Прошлый период', data: top.map(t => t.prevKg), backgroundColor: '#c7c9cf', borderRadius: 4 },
-      { label: 'Этот период', data: top.map(t => t.kg), backgroundColor: '#e5484d', borderRadius: 4 } ] },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend },
-        scales: { x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
-                  y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } } } });
     const br = (q.brigades || []).filter(b => b.share !== null);
     mk('kachBrigChart', { type: 'bar', data: { labels: br.map(b => b.name), datasets: [
       { label: 'Прошлый период', data: br.map(b => b.prevShare), backgroundColor: '#c7c9cf', borderRadius: 4 },
@@ -2034,9 +2022,8 @@ document.addEventListener('DOMContentLoaded', function () {
     mk('kachDefChart', { type: 'bar', data: { labels: dyn.map(d => d.period), datasets: [
       { label: 'Деформация, кг', data: dyn.map(d => d.defKg), backgroundColor: '#f5a524', borderRadius: 4 } ] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: axis(false) } });
-    const cm = q.complaintsMonthly || [];
-    mk('kachComplChart', { type: 'bar', data: { labels: cm.map(m => String(m.month).slice(0, 3)), datasets: [
-      { label: 'Жалобы, шт', data: cm.map(m => m.total), backgroundColor: '#9b59b6', borderRadius: 4 } ] },
+    mk('kachComplChart', { type: 'bar', data: { labels: dyn.map(d => d.period), datasets: [
+      { label: 'Жалобы, шт', data: dyn.map(d => d.complaints), backgroundColor: '#9b59b6', borderRadius: 4 } ] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: axis(false) } });
   }
 
