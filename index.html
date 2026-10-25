@@ -251,7 +251,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'konditerka') { main.innerHTML = renderKonditerka(DATA.konditerka); if (DATA.konditerka && !DATA.konditerka.error) drawKonditerkaCharts(DATA.konditerka); return; }
     if (key === 'atc') { main.innerHTML = renderATC(DATA.atc); if (DATA.atc && !DATA.atc.error) drawATCCharts(DATA.atc); return; }
     if (key === 'ot_tb') { main.innerHTML = renderOT(DATA.ot); if (DATA.ot && !DATA.ot.error) drawOTCharts(DATA.ot); return; }
-    if (['kachestvo','tech_sluzhby','sbyt'].includes(key)) { main.innerHTML = renderPlaceholder(TABS.find(t => t.key === key).label); return; }
+    if (key === 'kachestvo') { main.innerHTML = renderKachestvo(DATA.kachestvo); if (DATA.kachestvo && !DATA.kachestvo.error) drawKachestvoCharts(DATA.kachestvo); return; }
+    if (['tech_sluzhby','sbyt'].includes(key)) { main.innerHTML = renderPlaceholder(TABS.find(t => t.key === key).label); return; }
   }
  
   function goTab(key) {
@@ -300,6 +301,24 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="summary-metric">
               <div class="label">${g2.label}</div>
               <div class="value">${g2.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if (DATA.kachestvo && !DATA.kachestvo.error && DATA.kachestvo.kpis) {
+      const q1 = DATA.kachestvo.kpis[0], q2 = DATA.kachestvo.kpis[5];
+      html += `
+        <div class="summary-card" data-goto="kachestvo">
+          <div class="summary-top">${DATA.kachestvo.icon} ${DATA.kachestvo.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${q1.label}</div>
+              <div class="value">${q1.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${q2.label}</div>
+              <div class="value">${q2.value}</div>
             </div>
           </div>
         </div>`;
@@ -1895,6 +1914,130 @@ document.addEventListener('DOMContentLoaded', function () {
       { label: 'Несчастные случаи', data: w.map(x => x.accidents), backgroundColor: '#e5484d', borderRadius: 4 },
       { label: 'Аварии', data: w.map(x => x.breakdowns), backgroundColor: '#9b59b6', borderRadius: 4 },
       { label: 'Пожары', data: w.map(x => x.fires), backgroundColor: '#5a6270', borderRadius: 4 } ] } });
+  }
+
+  /* ---------------- КАЧЕСТВО ПРОДУКЦИИ ---------------- */
+  // Для брака и замечаний рост — плохо (красный), снижение — хорошо (зелёный)
+  function qFmt(x, dec) { return (x === null || x === undefined) ? '—' : Number(x).toFixed(dec).replace('.', ','); }
+  function qDelta(x, dec, unit) {
+    if (x === null || x === undefined) return '';
+    const col = x > 0 ? '#e5484d' : (x < 0 ? '#30a46c' : '#8a8d93');
+    return `<span style="color:${col};font-weight:600">${x > 0 ? '▲ +' : (x < 0 ? '▼ −' : '')}${qFmt(Math.abs(x), dec)}${unit || ''}</span>`;
+  }
+  function qNoteHtml(note) {
+    return String(note || '').replace(/Δ\s*([+−-])/g, (m, s) => s === '+' ? '<b style="color:#e5484d">▲ +</b>' : '<b style="color:#30a46c">▼ −</b>');
+  }
+
+  function renderKachestvo(q) {
+    if (!q || q.error) return `<div class="empty-dept">Таблица «Качество» недоступна${q && q.error ? '<br><small>' + q.error + '</small>' : ''}</div>`;
+    const kpiCards = (q.kpis || []).map(kp => `
+      <div class="kpi">
+        <div class="kpi-top"><span class="kpi-label">${kp.label}</span></div>
+        <div class="kpi-value">${kp.value}</div>
+        ${badgeHtml(kp)}
+        <div class="kpi-note" style="margin-top:4px">${qNoteHtml(kp.note)}</div>
+      </div>`).join('');
+
+    const shopRows = (q.shops || []).filter(s => s.share !== null).map(s => `
+      <tr><td>${s.name}</td><td class="num">${qFmt(s.kg, 1)}</td><td class="num">${qFmt(s.share, 2)}%</td>
+      <td class="num">${qDelta(s.dPp, 2, '')}</td><td class="num">${s.target !== null ? qFmt(s.target, 2) + '%' : ''}</td></tr>`).join('');
+
+    const compl = (q.complaints || []).filter(c => c.type === 'ВСЕГО' || c.now || c.prev || c.year);
+    const complRows = compl.map(c => `
+      <tr${c.type === 'ВСЕГО' ? ' style="font-weight:600"' : ''}><td>${c.type}</td><td class="num">${c.now ?? 0}</td>
+      <td class="num">${c.prev ?? 0}</td><td class="num">${c.month ?? 0}</td><td class="num">${c.year ?? 0}</td></tr>`).join('');
+
+    const plan = (q.plan || []).filter(p => p.status !== 'Выполнено');
+    const planRows = plan.map(p => `
+      <tr${p.overdue ? ' style="background:#fdecec"' : ''}><td><b>${p.what}</b><br><span class="kpi-note">${p.how || ''}</span></td>
+      <td>${p.who || '—'}</td><td class="num">${p.due || '—'}${p.overdue ? '<br><span style="color:#e5484d">просрочено</span>' : ''}</td>
+      <td>${p.status || '—'}</td></tr>`).join('');
+
+    const has = (arr, f) => arr && arr.some(f);
+    return `
+      ${q.period ? `<p class="date" style="margin:-4px 0 12px">${q.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+
+      ${has(q.dynamics, d => d.hcBrak !== null || d.hcZam !== null || d.msZam !== null) ? `
+      <div class="card"><p class="section-title">Доля брака и замечаний по периодам, %</p>
+        <div class="chart-wrap"><canvas id="kachDynChart"></canvas></div></div>` : ''}
+
+      ${shopRows ? `
+      <div class="card"><p class="section-title">Брак и замечания по цехам</p>
+        <table class="groups"><thead><tr><th>Цех — показатель</th><th>кг</th><th>Доля</th><th>Δ п.п.</th><th>Цель</th></tr></thead><tbody>${shopRows}</tbody></table></div>
+      <div class="card"><p class="section-title">Доля по цехам: этот и прошлый период, %</p>
+        <div class="chart-wrap" style="height:300px"><canvas id="kachShopsChart"></canvas></div></div>` : ''}
+
+      ${has(q.top, t => t.kg) ? `
+      <div class="card"><p class="section-title">Топ причин за период, кг</p>
+        <div class="chart-wrap" style="height:240px"><canvas id="kachTopChart"></canvas></div></div>` : ''}
+
+      ${has(q.brigades, b => b.share !== null) ? `
+      <div class="card"><p class="section-title">Доля замечаний по бригадам, %</p>
+        <div class="chart-wrap"><canvas id="kachBrigChart"></canvas></div></div>` : ''}
+
+      ${has(q.dynamics, d => d.defKg) ? `
+      <div class="card"><p class="section-title">Деформация по периодам, кг</p>
+        <div class="chart-wrap"><canvas id="kachDefChart"></canvas></div></div>` : ''}
+
+      ${complRows ? `
+      <div class="card"><p class="section-title">Жалобы, шт</p>
+        <table class="groups"><thead><tr><th>Вид</th><th>Период</th><th>Прошл.</th><th>Месяц</th><th>Год</th></tr></thead><tbody>${complRows}</tbody></table></div>` : ''}
+
+      ${has(q.complaintsMonthly, m => m.total) ? `
+      <div class="card"><p class="section-title">Жалобы по месяцам ${new Date().getFullYear()}, шт</p>
+        <div class="chart-wrap"><canvas id="kachComplChart"></canvas></div></div>` : ''}
+
+      ${q.summary && q.summary.length ? `
+      <div class="card"><p class="section-title">Резюме</p>
+        ${q.summary.map(s => `<p style="font-size:13px;margin:0 0 6px">• ${s}</p>`).join('')}</div>` : ''}
+
+      <div class="card"><p class="section-title">План работ — не выполнено</p>
+        ${planRows ? `<table class="groups"><thead><tr><th>Что устраняем / как</th><th>Кто</th><th>Срок</th><th>Статус</th></tr></thead><tbody>${planRows}</tbody></table>`
+                   : '<p class="kpi-note">Открытых пунктов нет.</p>'}</div>
+    `;
+  }
+
+  function drawKachestvoCharts(q) {
+    if (typeof Chart === 'undefined') return;
+    const axis = (pct) => ({
+      x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => pct ? String(v).replace('.', ',') + '%' : v }, grid: { color: '#eceef1' } }
+    });
+    const legend = { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } };
+    const mk = (id, cfg) => { const el = document.getElementById(id); if (el) new Chart(el, cfg); };
+    const dyn = q.dynamics || [];
+    mk('kachDynChart', { type: 'line', data: { labels: dyn.map(d => d.period), datasets: [
+      { label: 'ХЦ: брак', data: dyn.map(d => d.hcBrak), borderColor: '#e5484d', backgroundColor: '#e5484d', tension: 0.3, spanGaps: true },
+      { label: 'ХЦ: замечания', data: dyn.map(d => d.hcZam), borderColor: '#f5a524', backgroundColor: '#f5a524', tension: 0.3, spanGaps: true },
+      { label: 'МШ: замечания', data: dyn.map(d => d.msZam), borderColor: '#3a6df0', backgroundColor: '#3a6df0', tension: 0.3, spanGaps: true } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: axis(true) } });
+    const shops = (q.shops || []).filter(s => s.share !== null && !/в т\.ч\./.test(s.name));
+    mk('kachShopsChart', { type: 'bar', data: { labels: shops.map(s => s.name), datasets: [
+      { label: 'Прошлый период', data: shops.map(s => s.prevShare), backgroundColor: '#c7c9cf', borderRadius: 4 },
+      { label: 'Этот период', data: shops.map(s => s.share), backgroundColor: '#3a6df0', borderRadius: 4 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend },
+        scales: { x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => String(v).replace('.', ',') + '%' }, grid: { color: '#eceef1' } },
+                  y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } } } });
+    const top = q.top || [];
+    mk('kachTopChart', { type: 'bar', data: { labels: top.map(t => t.reason + ' (' + t.shop + ')'), datasets: [
+      { label: 'Прошлый период', data: top.map(t => t.prevKg), backgroundColor: '#c7c9cf', borderRadius: 4 },
+      { label: 'Этот период', data: top.map(t => t.kg), backgroundColor: '#e5484d', borderRadius: 4 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend },
+        scales: { x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
+                  y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } } } });
+    const br = (q.brigades || []).filter(b => b.share !== null);
+    mk('kachBrigChart', { type: 'bar', data: { labels: br.map(b => b.name), datasets: [
+      { label: 'Прошлый период', data: br.map(b => b.prevShare), backgroundColor: '#c7c9cf', borderRadius: 4 },
+      { label: 'Этот период', data: br.map(b => b.share), backgroundColor: '#3a6df0', borderRadius: 4 } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: axis(true) } });
+    mk('kachDefChart', { type: 'bar', data: { labels: dyn.map(d => d.period), datasets: [
+      { label: 'Деформация, кг', data: dyn.map(d => d.defKg), backgroundColor: '#f5a524', borderRadius: 4 } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: axis(false) } });
+    const cm = q.complaintsMonthly || [];
+    mk('kachComplChart', { type: 'bar', data: { labels: cm.map(m => String(m.month).slice(0, 3)), datasets: [
+      { label: 'Жалобы, шт', data: cm.map(m => m.total), backgroundColor: '#9b59b6', borderRadius: 4 } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: axis(false) } });
   }
 
   function renderPlaceholder(label) {
