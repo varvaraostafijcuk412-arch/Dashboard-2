@@ -2069,13 +2069,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const weekRows = (o.weeks || []).map(w => `<tr><td>${w.period}</td><td class="num">${oNum(w.total)}</td><td class="num">${oNum(w.gpu)}</td>
       <td class="num">${oNum(w.ye)}</td><td class="num">${w.share !== null ? String(w.share).replace('.', ',') + '%' : '—'}</td></tr>`).join('');
     const readRows = (o.readings || []).map(r => `<tr><td>${r.date}</td><td class="num">${oNum(r.total)}</td><td class="num">${oNum(r.gpu)}</td><td class="num">${oNum(r.ye)}</td></tr>`).join('');
-    const warn = (o.warnings || []).length ? `
-      <div class="card" style="background:#fff7e6"><p class="section-title" style="color:#b26b00">⚠️ Неполные показания — в расчёт не взяты</p>
-        ${o.warnings.map(w => `<p style="font-size:13px;margin:0 0 4px">• ${w}</p>`).join('')}</div>` : '';
+    const warn = (o.warnings || []).length
+      ? `<p class="kpi-note" style="margin-top:8px">Не учтены (неполные показания): ${o.warnings.map(w => w.replace(' (в расчёт не взято)', '')).join('; ')}</p>` : '';
     const has = (arr, f) => arr && arr.some(f);
     return `
       ${o.period ? `<p class="date" style="margin:-4px 0 12px">${o.period}</p>` : ''}
-      ${warn}
       <div class="kpi-grid">${kpiCards}</div>
       ${has(o.weeks, w => w.total) ? `
       <div class="card"><p class="section-title">Потребление по неделям отчётного месяца, кВтч</p>
@@ -2088,7 +2086,7 @@ document.addEventListener('DOMContentLoaded', function () {
       ${unitRows ? acc('Выработка по ГПУ №1–6', table(['Установка', 'Отчётный период', 'Прошл. месяц'], unitRows)) : ''}
       ${weekRows ? acc('По неделям', table(['Неделя', 'Всего', 'ГПУ', 'Якутскэнерго', 'Доля ГПУ'], weekRows)) : ''}
       ${readRows ? acc('Снятия показаний', table(['Дата', 'Всего', 'ГПУ', 'Якутскэнерго'], readRows) +
-        (o.note ? `<p class="kpi-note" style="margin-top:8px">${o.note}</p>` : '')) : ''}
+        (o.note ? `<p class="kpi-note" style="margin-top:8px">${o.note}</p>` : '') + warn) : ''}
     `;
   }
 
