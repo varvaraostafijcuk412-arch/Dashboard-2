@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (DATA.oge && !DATA.oge.error && DATA.oge.kpis && DATA.oge.kpis.length) {
-      const e1 = DATA.oge.kpis[0], e2 = DATA.oge.kpis[3];
+      const e1 = DATA.oge.kpis[0], e2 = DATA.oge.kpis[3] || DATA.oge.kpis[1];
       html += `
         <div class="summary-card" data-goto="oge">
           <div class="summary-top">${DATA.oge.icon} ${DATA.oge.label} <span class="chev">›</span></div>
@@ -2048,6 +2048,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   /* ---------------- ОГЭ — ЭЛЕКТРОЭНЕРГИЯ ---------------- */
+  // Показывает ровно то, что на дашборде таблицы «ГПУ ЯХК»
   function oNum(x) { return (x === null || x === undefined) ? '—' : String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
   function renderOGE(o) {
     if (!o || o.error) return `<div class="empty-dept">Таблица ОГЭ недоступна${o && o.error ? '<br><small>' + o.error + '</small>' : ''}</div>`;
@@ -2065,52 +2066,67 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="acc-body">${body}</div>
       </div>`;
     const table = (head, rows) => `<table class="groups"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
-    const unitRows = (o.units || []).map(u => `<tr><td>${u.name}</td><td class="num">${oNum(u.kwh)}</td><td class="num">${oNum(u.prevKwh)}</td></tr>`).join('');
-    const weekRows = (o.weeks || []).map(w => `<tr><td>${w.period}</td><td class="num">${oNum(w.total)}</td><td class="num">${oNum(w.gpu)}</td>
-      <td class="num">${oNum(w.ye)}</td><td class="num">${w.share !== null ? String(w.share).replace('.', ',') + '%' : '—'}</td></tr>`).join('');
-    const readRows = (o.readings || []).map(r => `<tr><td>${r.date}</td><td class="num">${oNum(r.total)}</td><td class="num">${oNum(r.gpu)}</td><td class="num">${oNum(r.ye)}</td></tr>`).join('');
-    const warn = (o.warnings || []).length
-      ? `<p class="kpi-note" style="margin-top:8px">Не учтены (неполные показания): ${o.warnings.map(w => w.replace(' (в расчёт не взято)', '')).join('; ')}</p>` : '';
+    const unitRows = (o.units || []).map(u => `<tr><td>${u.name}</td><td class="num">${oNum(u.kwh)}</td></tr>`).join('');
+    const monthRows = (o.months || []).filter(m => m.gpu || m.ye).map(m => `<tr><td>${m.month}</td><td class="num">${oNum(m.gpu)}</td>
+      <td class="num">${oNum(m.ye)}</td><td class="num">${m.shareGpu !== null ? String(m.shareGpu).replace('.', ',') + '%' : '—'}</td></tr>`).join('');
     const has = (arr, f) => arr && arr.some(f);
     return `
-      ${o.period ? `<p class="date" style="margin:-4px 0 12px">${o.period}</p>` : ''}
+      ${o.period ? `<p class="date" style="margin:-4px 0 12px">${o.period}${o.reportDate ? ' · дата отчёта ' + o.reportDate : ''}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
-      ${has(o.weeks, w => w.total) ? `
-      <div class="card"><p class="section-title">Потребление по неделям отчётного месяца, кВтч</p>
-        <div class="chart-wrap"><canvas id="ogeWeekChart"></canvas></div></div>
-      <div class="card"><p class="section-title">Доля ГПУ по неделям, %</p>
-        <div class="chart-wrap"><canvas id="ogeShareChart"></canvas></div></div>` : ''}
-      ${has(o.units, u => u.kwh || u.prevKwh) ? `
-      <div class="card"><p class="section-title">Выработка по установкам ГПУ, кВтч</p>
+      ${o.compareNote ? `<p class="kpi-note" style="margin:-4px 0 12px">${o.compareNote}</p>` : ''}
+      ${has(o.daily, x => x.gpu || x.ye) ? `
+      <div class="card"><p class="section-title">Потребление по дням, кВтч</p>
+        <div class="chart-wrap"><canvas id="ogeDailyChart"></canvas></div></div>` : ''}
+      ${has(o.units, u => u.kwh) ? `
+      <div class="card"><p class="section-title">Выработка по станциям за период, кВтч</p>
         <div class="chart-wrap"><canvas id="ogeUnitsChart"></canvas></div></div>` : ''}
-      ${unitRows ? acc('Выработка по ГПУ №1–6', table(['Установка', 'Отчётный период', 'Прошл. месяц'], unitRows)) : ''}
-      ${weekRows ? acc('По неделям', table(['Неделя', 'Всего', 'ГПУ', 'Якутскэнерго', 'Доля ГПУ'], weekRows)) : ''}
-      ${readRows ? acc('Снятия показаний', table(['Дата', 'Всего', 'ГПУ', 'Якутскэнерго'], readRows) +
-        (o.note ? `<p class="kpi-note" style="margin-top:8px">${o.note}</p>` : '') + warn) : ''}
+      ${has(o.share, x => x.kwh) ? `
+      <div class="card"><p class="section-title">Доля ГПУ и Якутскэнерго за период</p>
+        <div class="chart-wrap"><canvas id="ogeShareChart"></canvas></div></div>` : ''}
+      ${has(o.months, m => m.gpu || m.ye) ? `
+      <div class="card"><p class="section-title">По месяцам за год, кВтч</p>
+        <div class="chart-wrap"><canvas id="ogeMonthsChart"></canvas></div></div>
+      <div class="card"><p class="section-title">Доля ГПУ и Якутскэнерго по месяцам, %</p>
+        <div class="chart-wrap"><canvas id="ogeMonthShareChart"></canvas></div></div>` : ''}
+      ${unitRows ? acc('Выработка по станциям', table(['Станция', 'кВтч'], unitRows)) : ''}
+      ${monthRows ? acc('По месяцам за год', table(['Месяц', 'ГПУ', 'Якутскэнерго', 'Доля ГПУ'], monthRows)) : ''}
     `;
   }
 
   function drawOGECharts(o) {
     if (typeof Chart === 'undefined') return;
+    const GPU = '#30a46c', YE = '#f5a524';
     const legend = { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } };
-    const sc = (pct, stacked) => ({
-      x: { stacked: !!stacked, ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
-      y: { stacked: !!stacked, beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => pct ? v + '%' : String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') }, grid: { color: '#eceef1' } }
-    });
+    const fmt = v => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const sc = (stacked, pct, horizontal) => {
+      const val = { stacked: !!stacked, beginAtZero: true, max: pct ? 100 : undefined, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => pct ? v + '%' : fmt(v) }, grid: { color: '#eceef1' } };
+      const cat = { stacked: !!stacked, ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } };
+      return horizontal ? { x: val, y: cat } : { x: cat, y: val };
+    };
     const mk = (id, cfg) => { const el = document.getElementById(id); if (el) new Chart(el, cfg); };
-    const w = o.weeks || [];
-    mk('ogeWeekChart', { type: 'bar', data: { labels: w.map(x => x.period), datasets: [
-      { label: 'ГПУ', data: w.map(x => x.gpu), backgroundColor: '#30a46c', borderRadius: 4 },
-      { label: 'Якутскэнерго', data: w.map(x => x.ye), backgroundColor: '#3a6df0', borderRadius: 4 } ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: sc(false, true) } });
-    mk('ogeShareChart', { type: 'line', data: { labels: w.map(x => x.period), datasets: [
-      { label: 'Доля ГПУ, %', data: w.map(x => x.share), borderColor: '#30a46c', backgroundColor: '#30a46c', tension: 0.3, spanGaps: true } ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: sc(true) } });
+    const d = o.daily || [];
+    mk('ogeDailyChart', { type: 'bar', data: { labels: d.map(x => x.date), datasets: [
+      { label: 'ГПУ', data: d.map(x => x.gpu), backgroundColor: GPU },
+      { label: 'Якутскэнерго', data: d.map(x => x.ye), backgroundColor: YE } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: sc(true) } });
     const u = o.units || [];
     mk('ogeUnitsChart', { type: 'bar', data: { labels: u.map(x => x.name), datasets: [
-      { label: 'Прошлый месяц (те же дни)', data: u.map(x => x.prevKwh), backgroundColor: '#c7c9cf', borderRadius: 4 },
-      { label: 'Отчётный период', data: u.map(x => x.kwh), backgroundColor: '#30a46c', borderRadius: 4 } ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: sc(false) } });
+      { label: 'кВтч', data: u.map(x => x.kwh), backgroundColor: GPU, borderRadius: 4 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: sc(false, false, true) } });
+    const sh = o.share || [];
+    mk('ogeShareChart', { type: 'doughnut', data: { labels: sh.map(x => x.name), datasets: [
+      { data: sh.map(x => x.kwh), backgroundColor: [GPU, YE] } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend,
+        tooltip: { callbacks: { label: c => { const t = sh.reduce((a, x) => a + (x.kwh || 0), 0); return c.label + ': ' + fmt(c.raw) + ' кВтч (' + (t ? Math.round(c.raw / t * 100) : 0) + '%)'; } } } } } });
+    const m = o.months || [];
+    mk('ogeMonthsChart', { type: 'bar', data: { labels: m.map(x => x.month), datasets: [
+      { label: 'ГПУ', data: m.map(x => x.gpu), backgroundColor: GPU },
+      { label: 'Якутскэнерго', data: m.map(x => x.ye), backgroundColor: YE } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: sc(true) } });
+    mk('ogeMonthShareChart', { type: 'bar', data: { labels: m.map(x => x.month), datasets: [
+      { label: 'ГПУ', data: m.map(x => x.shareGpu), backgroundColor: GPU },
+      { label: 'Якутскэнерго', data: m.map(x => x.shareGpu === null ? null : Math.round((100 - x.shareGpu) * 10) / 10), backgroundColor: YE } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: sc(true, true) } });
   }
 
   function renderPlaceholder(label) {
