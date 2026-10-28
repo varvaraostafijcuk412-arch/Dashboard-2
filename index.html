@@ -2052,12 +2052,14 @@ document.addEventListener('DOMContentLoaded', function () {
   function oNum(x) { return (x === null || x === undefined) ? '—' : String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
   function renderOGE(o) {
     if (!o || o.error) return `<div class="empty-dept">Таблица ОГЭ недоступна${o && o.error ? '<br><small>' + o.error + '</small>' : ''}</div>`;
-    const kpiCards = (o.kpis || []).map(kp => `
+    // доли ГПУ / Якутскэнерго показываем диаграммой, а не плитками
+    const kpiCards = (o.kpis || []).filter(kp => !/^доля/i.test(kp.label)).map(kp => `
       <div class="kpi">
         <div class="kpi-top"><span class="kpi-label">${kp.label}</span></div>
         <div class="kpi-value">${kp.value}</div>
         <div class="kpi-note" style="margin-top:4px">${kp.note || ''}</div>
       </div>`).join('');
+    const shareNotes = (o.kpis || []).filter(kp => /^доля/i.test(kp.label) && kp.note).map(kp => kp.label + ': ' + kp.note + ' к прошл. периоду').join(' · ');
     const acc = (title, body) => `
       <div class="card acc">
         <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
@@ -2082,7 +2084,8 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="chart-wrap"><canvas id="ogeUnitsChart"></canvas></div></div>` : ''}
       ${has(o.share, x => x.kwh) ? `
       <div class="card"><p class="section-title">Доля ГПУ и Якутскэнерго за период</p>
-        <div class="chart-wrap"><canvas id="ogeShareChart"></canvas></div></div>` : ''}
+        <div class="chart-wrap"><canvas id="ogeShareChart"></canvas></div>
+        ${shareNotes ? `<p class="kpi-note" style="margin-top:8px">${shareNotes}</p>` : ''}</div>` : ''}
       ${has(o.months, m => m.gpu || m.ye) ? `
       <div class="card"><p class="section-title">По месяцам за год, кВтч</p>
         <div class="chart-wrap"><canvas id="ogeMonthsChart"></canvas></div></div>
@@ -2114,10 +2117,11 @@ document.addEventListener('DOMContentLoaded', function () {
       { label: 'кВтч', data: u.map(x => x.kwh), backgroundColor: GPU, borderRadius: 4 } ] },
       options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: sc(false, false, true) } });
     const sh = o.share || [];
-    mk('ogeShareChart', { type: 'doughnut', data: { labels: sh.map(x => x.name), datasets: [
+    const shTot = sh.reduce((a, x) => a + (x.kwh || 0), 0);
+    mk('ogeShareChart', { type: 'doughnut', data: { labels: sh.map(x => x.name + ' — ' + (shTot ? Math.round(x.kwh / shTot * 100) : 0) + '%'), datasets: [
       { data: sh.map(x => x.kwh), backgroundColor: [GPU, YE] } ] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend,
-        tooltip: { callbacks: { label: c => { const t = sh.reduce((a, x) => a + (x.kwh || 0), 0); return c.label + ': ' + fmt(c.raw) + ' кВтч (' + (t ? Math.round(c.raw / t * 100) : 0) + '%)'; } } } } } });
+        tooltip: { callbacks: { label: c => { const t = sh.reduce((a, x) => a + (x.kwh || 0), 0); return c.label + ' · ' + fmt(c.raw) + ' кВтч'; } } } } } });
     const m = o.months || [];
     mk('ogeMonthsChart', { type: 'bar', data: { labels: m.map(x => x.month), datasets: [
       { label: 'ГПУ', data: m.map(x => x.gpu), backgroundColor: GPU },
