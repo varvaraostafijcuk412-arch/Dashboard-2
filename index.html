@@ -198,6 +198,160 @@ document.addEventListener('DOMContentLoaded', function () {
   ];
  
   let DATA = null;
+
+  /* ---------- Цифры на диаграммах (во всех вкладках) ----------
+     Столбцы — значение у каждого столбца (если столбцов много — только у последнего, то есть у отчётной недели/даты);
+     линии — значение последней точки (отчётная неделя/дата); кольцевые — доля сегмента в %.
+     Формат берётся из подписей оси: если ось в %, у цифр тоже «%». Отключить для одной диаграммы: options.plugins.valueLabels = false */
+  function registerValueLabels() {
+    if (typeof Chart === 'undefined' || registerValueLabels.done) return;
+    registerValueLabels.done = true;
+    Chart.defaults.scales.linear.grace = '10%';           // место над столбцами для цифр
+    Chart.defaults.layout.padding = { top: 6, right: 6 };
+    const compact = v => {
+      const a = Math.abs(v), sign = v < 0 ? '−' : '';
+      const ru = (x, d) => x.toFixed(d).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      if (a >= 1e6) return sign + ru(a / 1e6, a >= 1e8 ? 0 : 1) + ' млн';
+      if (a >= 1e4) return sign + ru(a, 0);
+      if (Number.isInteger(a) || a >= 100) return sign + ru(a, 0);
+      return sign + ru(a, a < 10 ? 2 : 1).replace(/,?0+$/, '');   // 0,26 · 1,18 · 75,9
+    };
+    // цвет цифры внутри столбца: белая на тёмном столбце, тёмная — на светлом
+    const inside = el => {
+      const c = String(el.options && el.options.backgroundColor || '');
+      const m = c.match(/^#([0-9a-f]{6})$/i);
+      if (!m) return '#fff';
+      const n = parseInt(m[1], 16), lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+      return lum > 165 ? '#3c4048' : '#fff';
+    };
+    Chart.register({
+      id: 'valueLabels',
+      afterDatasetsDraw(chart) {
+        try { drawValueLabels(chart); } catch (e) { /* цифры — не критично, диаграмма остаётся */ }
+      }
+    });
+    function drawValueLabels(chart) {
+        if (chart.options.plugins && chart.options.plugins.valueLabels === false) return;
+        const ctx = chart.ctx, area = chart.chartArea;
+        const horiz = chart.options.indexAxis === 'y';
+        const nLab = (chart.data.labels || []).length || 1;
+        const slot = (horiz ? area.bottom - area.top : area.right - area.left) / nLab;   // место на одну категорию
+        const num = x => typeof x === 'number' && isFinite(x) ? x : (x && typeof x.y === 'number' ? x.y : null);
+        const pctOf = scale => { try { const cb = scale.options.ticks.callback; return !!cb && String(cb.call(scale, 50, 0, [{ value: 50 }])).indexOf('%') !== -1; } catch (e) { return false; } };
+        // какие категории подписывать: все, а если цифры не помещаются — только последнюю (отчётную неделю/дату)
+        const pick = (idx, texts) => {
+          if (!idx.length) return idx;
+          const wMax = Math.max(...texts.map(t => ctx.measureText(t).width));
+          const room = horiz ? slot >= 9 : wMax <= slot - 3;
+          return room ? idx : [idx[idx.length - 1]];
+        };
+        ctx.save();
+        ctx.font = '600 9.5px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+        const bars = [], lineYs = [];
+        chart.data.datasets.forEach((ds, i) => {
+          if (!chart.isDatasetVisible(i)) return;
+          const meta = chart.getDatasetMeta(i), type = meta.type;
+          const vals = ds.data.map(num);
+          if (type === 'doughnut' || type === 'pie') {
+            const total = vals.reduce((x, y) => x + (y > 0 ? y : 0), 0);
+            if (!total) return;
+            meta.data.forEach((arc, j) => {
+              const v = vals[j]; if (!v || v / total < 0.05) return;
+              const p = arc.tooltipPosition();
+              ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              ctx.fillText(String(Math.round(v / total * 100)) + '%', p.x, p.y);
+            });
+            return;
+          }
+          const scale = meta.vScale; if (!scale) return;
+          const pct = pctOf(scale);
+          const fmt = v => pct ? (v < 0 ? '−' : '') + Math.abs(v).toFixed(Math.abs(v) < 10 ? 2 : 1).replace('.', ',').replace(/,?0+$/, '') + '%' : compact(v);
+          if (type === 'line') {                                   // линия — цифра у последней точки
+            const j = vals.map((v, k) => v === null ? -1 : k).filter(k => k >= 0).pop();
+            const el = meta.data[j]; if (j === undefined || !el) return;
+            const t = fmt(vals[j]), w = ctx.measureText(t).width;
+            ctx.fillStyle = '#4a505a'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            let y = el.y - 5;
+            while (lineYs.some(q => Math.abs(q - y) < 11)) y -= 11;    // не налезать на цифру соседней линии
+            lineYs.push(y);
+            ctx.fillText(t, Math.min(Math.max(el.x, area.left + w / 2), area.right - w / 2), y);
+            return;
+          }
+          if (type !== 'bar') return;
+          bars.push({ i, meta, vals, pct, fmt, stacked: !!(scale.options && scale.options.stacked) });
+        });
+        const stackedBars = bars.filter(b => b.stacked), plainBars = bars.filter(b => !b.stacked);
+        // обычные столбцы — цифра у конца каждого столбца
+        plainBars.forEach(({ meta, vals, fmt }) => {
+          let idx = vals.map((v, k) => v === null ? -1 : k).filter(k => k >= 0);
+          idx = pick(idx, idx.map(k => fmt(vals[k])));
+          idx.forEach(j => {
+            const el = meta.data[j]; if (!el) return;
+            const v = vals[j], t = fmt(v), w = ctx.measureText(t).width, neg = v < 0;
+            ctx.fillStyle = '#4a505a';
+            if (horiz) {
+              if (el.height < 5) return;
+              ctx.font = (el.height < 10 ? '600 8px' : '600 9.5px') + ' -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+              const len = Math.abs(el.x - el.base);
+              let x = neg ? el.x - 4 : el.x + 4;
+              ctx.textBaseline = 'middle'; ctx.textAlign = neg ? 'right' : 'left';
+              if (!neg && x + w > area.right) {
+                if (len >= w + 8) { x = el.x - 4; ctx.textAlign = 'right'; ctx.fillStyle = inside(el); }
+                else { x = el.base - 4; ctx.textAlign = 'right'; }
+              }
+              if (neg && x - w < area.left) {
+                if (len >= w + 8) { x = el.x + 4; ctx.textAlign = 'left'; ctx.fillStyle = inside(el); }
+                else { x = el.base + 4; ctx.textAlign = 'left'; }
+              }
+              ctx.fillText(t, x, el.y);
+              ctx.font = '600 9.5px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+            } else {
+              ctx.textAlign = 'center'; ctx.textBaseline = neg ? 'top' : 'bottom';
+              ctx.fillText(t, el.x, neg ? el.y + 3 : el.y - 3);
+            }
+          });
+        });
+        if (stackedBars.length) {
+          if (stackedBars[0].pct) {                                // составные доли в % — цифра внутри сегмента
+            ctx.font = '600 8.5px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+            stackedBars.forEach(({ meta, vals }) => vals.forEach((v, j) => {
+              const el = meta.data[j]; if (!el || v === null || !v) return;
+              const t = String(Math.round(v)) + '%', w = ctx.measureText(t).width;
+              const size = horiz ? Math.abs(el.x - el.base) : Math.abs(el.base - el.y), thick = horiz ? el.height : el.width;
+              if (size < (horiz ? w + 4 : 11) || thick < (horiz ? 9 : w - 3)) return;
+              ctx.fillStyle = inside(el); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              ctx.fillText(t, horiz ? (el.x + el.base) / 2 : el.x, horiz ? el.y : (el.y + el.base) / 2);
+            }));
+          } else {                                                 // составные столбцы — сумма над столбцом
+            const sums = [], tops = [];
+            for (let j = 0; j < nLab; j++) {
+              let s = 0, any = false, top = null;
+              stackedBars.forEach(({ meta, vals }) => {
+                const v = vals[j], el = meta.data[j]; if (v === null || !el) return;
+                s += v; any = true;
+                if (top === null || (horiz ? el.x > top.x : el.y < top.y)) top = { x: el.x, y: el.y };
+              });
+              sums.push(any && s ? s : null); tops.push(top);
+            }
+            let idx = sums.map((v, k) => v === null ? -1 : k).filter(k => k >= 0);
+            let texts = idx.map(k => compact(sums[k]));
+            if (!horiz && Math.max(...texts.map(t => ctx.measureText(t).width), 0) > slot - 3) {   // в тысячах, если не помещается
+              const t2 = idx.map(k => Math.abs(sums[k]) >= 1e4 ? compact(Math.round(sums[k] / 1000)) + ' тыс' : compact(sums[k]));
+              if (Math.max(...t2.map(t => ctx.measureText(t).width)) <= slot - 3) texts = t2;
+            }
+            const keep = pick(idx, texts);
+            const tmap = {}; idx.forEach((k, n) => { tmap[k] = texts[n]; });
+            ctx.fillStyle = '#4a505a';
+            keep.forEach(j => {
+              const t = tmap[j], top = tops[j]; if (!top) return;
+              if (horiz) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, Math.min(top.x + 4, area.right - ctx.measureText(t).width), top.y); }
+              else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(t, top.x, top.y - 3); }
+            });
+          }
+        }
+        ctx.restore();
+    }
+  }
  
   function fmtDate(d) {
     return new Intl.DateTimeFormat('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' }).format(d);
@@ -209,6 +363,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const res = await fetch(APPS_SCRIPT_URL);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       DATA = await res.json();
+      registerValueLabels();
       buildTabs();
       renderTab('summary');
     } catch (err) {
@@ -252,9 +407,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (key === 'konditerka') { main.innerHTML = renderKonditerka(DATA.konditerka); if (DATA.konditerka && !DATA.konditerka.error) drawKonditerkaCharts(DATA.konditerka); return; }
     if (key === 'atc') { main.innerHTML = renderATC(DATA.atc); if (DATA.atc && !DATA.atc.error) drawATCCharts(DATA.atc); return; }
     if (key === 'ot_tb') { main.innerHTML = renderOT(DATA.ot); if (DATA.ot && !DATA.ot.error) drawOTCharts(DATA.ot); return; }
+    if (key === 'fts') { main.innerHTML = renderFTS(DATA.fts); if (DATA.fts && !DATA.fts.error) drawFTSCharts(DATA.fts); return; }
     if (key === 'oge') { main.innerHTML = renderOGE(DATA.oge); if (DATA.oge && !DATA.oge.error) drawOGECharts(DATA.oge); return; }
     if (key === 'kachestvo') { main.innerHTML = renderKachestvo(DATA.kachestvo); if (DATA.kachestvo && !DATA.kachestvo.error) drawKachestvoCharts(DATA.kachestvo); return; }
-    if (['tech_sluzhby','sbyt'].includes(key)) { main.innerHTML = renderPlaceholder(TABS.find(t => t.key === key).label); return; }
+    if (key === 'sbyt') { main.innerHTML = renderSbyt(DATA.sbyt); if (DATA.sbyt && !DATA.sbyt.error) drawSbytCharts(DATA.sbyt); return; }
+    if (['tech_sluzhby'].includes(key)) { main.innerHTML = renderPlaceholder(TABS.find(t => t.key === key).label); return; }
   }
  
   function goTab(key) {
@@ -339,6 +496,42 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="summary-metric">
               <div class="label">${e2.label}</div>
               <div class="value">${e2.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if (DATA.sbyt && !DATA.sbyt.error && DATA.sbyt.kpis && DATA.sbyt.kpis.length) {
+      const s1 = DATA.sbyt.kpis[1], s2 = DATA.sbyt.kpis[3];
+      html += `
+        <div class="summary-card" data-goto="sbyt">
+          <div class="summary-top">${DATA.sbyt.icon} ${DATA.sbyt.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${s1.label}</div>
+              <div class="value">${s1.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${s2.label}</div>
+              <div class="value">${s2.value}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if (DATA.fts && !DATA.fts.error && DATA.fts.kpis && DATA.fts.kpis.length) {
+      const f1 = DATA.fts.kpis[0], f2 = DATA.fts.kpis[2];
+      html += `
+        <div class="summary-card" data-goto="fts">
+          <div class="summary-top">${DATA.fts.icon} ${DATA.fts.label} <span class="chev">›</span></div>
+          <div class="summary-grid">
+            <div class="summary-metric">
+              <div class="label">${f1.label}</div>
+              <div class="value">${f1.value}</div>
+            </div>
+            <div class="summary-metric">
+              <div class="label">${f2.label}</div>
+              <div class="value">${f2.value}</div>
             </div>
           </div>
         </div>`;
@@ -1295,182 +1488,159 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  /* ---------------- ФТС — показывает то, что на дашборде таблицы ФТС ---------------- */
+  function ftsPct(x) { return x === null || x === undefined ? '—' : (x > 0 ? '+' : '') + String(x).replace('.', ',') + '%'; }
+  function ftsRub(x) { return x === null || x === undefined ? '—' : String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function ftsColor(x) { return x === null || x === undefined ? '#8a8d93' : (x < 0 ? '#e5484d' : '#30a46c'); }
   function renderFTS(fts) {
-    if (!fts || fts.error) return `<div class="empty-dept">Таблица ФТС недоступна</div>`;
-
-    const kpiCards = fts.kpis.map(k => `
-      <div class="kpi" onclick="this.classList.toggle('open')">
-        <div class="kpi-top"><span class="kpi-label">${k.label}</span><span class="kpi-chev">›</span></div>
-        <div class="kpi-value">${k.value}</div>
-        ${badgeHtml(k)}
-        <div class="kpi-detail">${kpiDetail(k)}</div>
-      </div>
-    `).join('');
-
-    const signalRows = (fts.weeklySignals || []).map(s => `
-      <tr>
-        <td>${s.name}</td>
-        <td class="num">${s.deltaRevenue}%</td>
-        <td>${s.status}</td>
-      </tr>
-    `).join('');
-
-    const revenueHasData = fts.storeRevenue && fts.storeRevenue.length > 0;
-    const signalsHasData = fts.weeklySignals && fts.weeklySignals.length > 0;
-    const returnsHasData = fts.returns && fts.returns.length > 0;
-    const shortagesHasData = fts.shortages && fts.shortages.some(s => s.sum);
-
+    if (!fts || fts.error) return `<div class="empty-dept">Таблица ФТС недоступна${fts && fts.error ? '<br><small>' + fts.error + '</small>' : ''}</div>`;
+    const kpiCards = (fts.kpis || []).map(kp => {
+      const m = String(kp.note || '').match(/^([▲▼])/);
+      const col = m ? (m[1] === '▲' ? '#30a46c' : '#e5484d') : '#8a8d93';
+      return `
+      <div class="kpi">
+        <div class="kpi-top"><span class="kpi-label">${kp.label}</span></div>
+        <div class="kpi-value">${kp.value}</div>
+        <div class="kpi-note" style="margin-top:4px;color:${col};font-weight:${m ? 600 : 400}">${kp.note || ''}</div>
+      </div>`; }).join('');
+    const acc = (title, body) => `
+      <div class="card acc">
+        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
+          <span>${title}</span><span class="acc-chev">›</span>
+        </p>
+        <div class="acc-body">${body}</div>
+      </div>`;
+    const cell = x => `<td class="num" style="color:${ftsColor(x)};font-weight:600">${ftsPct(x)}</td>`;
+    const storeRows = (fts.stores || []).map(s => `<tr><td>${s.name}</td><td class="num">${ftsRub(s.revenue)}</td>
+      ${s.isNew ? '<td class="num">новый</td>' : cell(s.dRevenue)}${s.isNew ? '<td class="num">новый</td>' : cell(s.dChecks)}
+      <td class="num">${ftsRub(s.avgCheck)}</td>${s.isNew ? '<td class="num">новый</td>' : cell(s.dAvgCheck)}</tr>`).join('');
+    const t = fts.total;
+    const totRow = t ? `<tr style="font-weight:600"><td>ИТОГО СЕТЬ</td><td class="num">${ftsRub(t.revenue)}</td>${cell(t.dRevenue)}${cell(t.dChecks)}<td class="num">${ftsRub(t.avgCheck)}</td>${cell(t.dAvgCheck)}</tr>` : '';
+    const L = fts.leaders || {};
+    const lead = (arr) => (arr || []).map((x, i) => `<tr><td>${i + 1}. ${x.name}</td>${cell(x.dRevenue)}</tr>`).join('');
+    const has = (arr) => arr && arr.length;
     return `
       ${fts.period ? `<p class="date" style="margin:-4px 0 12px">${fts.period}</p>` : ''}
       <div class="kpi-grid">${kpiCards}</div>
-
-      ${revenueHasData ? `
-      <div class="card">
-        <p class="section-title">Выручка по магазинам — 2026 vs 2025</p>
-        <div class="chart-wrap"><canvas id="ftsRevenueChart"></canvas></div>
-      </div>
-      ` : ''}
-
-      ${signalsHasData ? `
-      <div class="card">
-        <p class="section-title">Δ выручка за неделю по магазинам, %</p>
-        <div class="chart-wrap" style="height:260px"><canvas id="ftsSignalsChart"></canvas></div>
-      </div>
-
-      <div class="card acc">
-        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
-          <span>Сигналы по магазинам — подробно</span><span class="acc-chev">›</span>
-        </p>
-        <div class="acc-body">
-          <table class="groups"><thead><tr><th>Магазин</th><th>Δ выручка</th><th>Статус</th></tr></thead><tbody>${signalRows}</tbody></table>
-        </div>
-      </div>
-      ` : ''}
-
-      ${returnsHasData ? `
-      <div class="card">
-        <p class="section-title">Возврат, % по магазинам</p>
-        <div class="chart-wrap"><canvas id="ftsReturnsChart"></canvas></div>
-      </div>
-      ` : ''}
-
-      ${shortagesHasData ? `
-      <div class="card">
-        <p class="section-title">Недовозы (—) / довозы (+), руб</p>
-        <div class="chart-wrap"><canvas id="ftsShortagesChart"></canvas></div>
-      </div>
-      ` : ''}
+      ${fts.note ? `<p class="kpi-note" style="margin:-4px 0 12px">${fts.note}</p>` : ''}
+      ${has(fts.stores) ? `
+      <div class="card"><p class="section-title">Выручка по магазинам: 2026 и АППГ, ₽</p>
+        <div class="chart-wrap" style="height:${Math.max(260, fts.stores.length * 26)}px"><canvas id="ftsRevChart"></canvas></div></div>
+      <div class="card"><p class="section-title">Δ выручки к АППГ по магазинам, %</p>
+        <div class="chart-wrap" style="height:${Math.max(240, fts.stores.length * 22)}px"><canvas id="ftsDeltaChart"></canvas></div></div>
+      <div class="card"><p class="section-title">Δ чеков к АППГ по магазинам, %</p>
+        <div class="chart-wrap" style="height:${Math.max(240, fts.stores.length * 22)}px"><canvas id="ftsChecksChart"></canvas></div></div>` : ''}
+      ${has(L.up) || has(L.down) ? acc('Лидеры и отстающие (Δ выручки к АППГ)',
+        `<table class="groups"><thead><tr><th>Наибольший рост</th><th>Δ</th></tr></thead><tbody>${lead(L.up)}</tbody></table>
+         <table class="groups" style="margin-top:10px"><thead><tr><th>Наибольшее снижение</th><th>Δ</th></tr></thead><tbody>${lead(L.down)}</tbody></table>
+         <p class="kpi-note" style="margin-top:8px">Новые магазины без АППГ в рейтинг не входят.</p>`) : ''}
+      ${storeRows ? acc('По магазинам', `<table class="groups"><thead><tr><th>Магазин</th><th>Выручка, ₽</th><th>Δ выр.</th><th>Δ чеки</th><th>Ср. чек</th><th>Δ ср. чек</th></tr></thead><tbody>${storeRows}${totRow}</tbody></table>`) : ''}
     `;
   }
 
   function drawFTSCharts(fts) {
-    const revEl = document.getElementById('ftsRevenueChart');
-    if (revEl && fts.storeRevenue && fts.storeRevenue.length) {
-      if (typeof Chart === 'undefined') {
-        revEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
-      } else {
-        new Chart(revEl, {
-          type: 'bar',
-          data: {
-            labels: fts.storeRevenue.map(s => s.name),
-            datasets: [
-              { label: '2026', data: fts.storeRevenue.map(s => s.rev2026), backgroundColor: '#3a6df0', borderRadius: 4 },
-              { label: '2025', data: fts.storeRevenue.map(s => s.rev2025), backgroundColor: '#c7c9cf', borderRadius: 4 }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
-            scales: {
-              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
-              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
-            }
-          }
-        });
-      }
-    }
+    if (typeof Chart === 'undefined') return;
+    const st = fts.stores || [];
+    const fmt = v => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const mk = (id, cfg) => { const el = document.getElementById(id); if (el) new Chart(el, cfg); };
+    const scales = pct => ({
+      x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => pct ? v + '%' : fmt(v) }, grid: { color: '#eceef1' } },
+      y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } });
+    mk('ftsRevChart', { type: 'bar', data: { labels: st.map(s => s.name), datasets: [
+      { label: 'АППГ', data: st.map(s => s.revenueAppg), backgroundColor: '#c7c9cf', borderRadius: 3 },
+      { label: '2026', data: st.map(s => s.revenue), backgroundColor: '#3a6df0', borderRadius: 3 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } }, scales: scales(false) } });
+    const old = st.filter(s => !s.isNew);
+    const bar = (id, key) => mk(id, { type: 'bar', data: { labels: old.map(s => s.name), datasets: [
+      { data: old.map(s => s[key]), backgroundColor: old.map(s => (s[key] || 0) < 0 ? '#e5484d' : '#30a46c'), borderRadius: 3 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: c => (c.raw > 0 ? '+' : '') + String(c.raw).replace('.', ',') + '%' } } }, scales: scales(true) } });
+    bar('ftsDeltaChart', 'dRevenue');
+    bar('ftsChecksChart', 'dChecks');
+  }
 
-    const sigEl = document.getElementById('ftsSignalsChart');
-    if (sigEl && fts.weeklySignals && fts.weeklySignals.length) {
-      if (typeof Chart === 'undefined') {
-        sigEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
-      } else {
-        new Chart(sigEl, {
-          type: 'bar',
-          data: {
-            labels: fts.weeklySignals.map(s => s.name),
-            datasets: [{
-              data: fts.weeklySignals.map(s => s.deltaRevenue),
-              backgroundColor: fts.weeklySignals.map(s => s.deltaRevenue >= 0 ? '#22a854' : '#d24b3a'),
-              borderRadius: 4
-            }]
-          },
-          options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
-              y: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } }
-            }
-          }
-        });
-      }
-    }
 
-    const retEl = document.getElementById('ftsReturnsChart');
-    if (retEl && fts.returns && fts.returns.length) {
-      if (typeof Chart === 'undefined') {
-        retEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
-      } else {
-        new Chart(retEl, {
-          type: 'bar',
-          data: {
-            labels: fts.returns.map(r => r.name),
-            datasets: [{ data: fts.returns.map(r => r.pct), backgroundColor: '#e3a008', borderRadius: 4 }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
-              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
-            }
-          }
-        });
-      }
-    }
+  /* ---------------- СБЫТ — показывает то, что на дашборде таблицы «Сбыт» ---------------- */
+  function sbPct(x) { return x === null || x === undefined ? '—' : String(x).replace('.', ',') + '%'; }
+  function sbRub(x) { return x === null || x === undefined ? '—' : String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function renderSbyt(sb) {
+    if (!sb || sb.error) return `<div class="empty-dept">Таблица сбыта недоступна${sb && sb.error ? '<br><small>' + sb.error + '</small>' : ''}</div>`;
+    const kpiCards = (sb.kpis || []).map(kp => {
+      const m = String(kp.note || '').match(/^([▲▼])/);
+      const col = m ? (m[1] === '▲' ? '#30a46c' : '#e5484d') : '#8a8d93';
+      return `
+      <div class="kpi">
+        <div class="kpi-top"><span class="kpi-label">${kp.label}</span></div>
+        <div class="kpi-value">${kp.value}</div>
+        <div class="kpi-note" style="margin-top:4px;color:${col};font-weight:${m ? 600 : 400}">${kp.note || ''}</div>
+      </div>`; }).join('');
+    const acc = (title, body) => `
+      <div class="card acc">
+        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')">
+          <span>${title}</span><span class="acc-chev">›</span>
+        </p>
+        <div class="acc-body">${body}</div>
+      </div>`;
+    const done = x => `<td class="num" style="color:${x === null || x === undefined ? '#8a8d93' : (x < 100 ? '#e5484d' : '#30a46c')};font-weight:600">${sbPct(x)}</td>`;
+    const dlt = x => `<td class="num" style="color:${ftsColor(x)};font-weight:600">${ftsPct(x)}</td>`;
+    const pos = (sb.positions || []).filter(p => p.planRub || p.factRub || p.appgRub);
+    const rows = (sb.rows || []).map(r => {
+      const st = r.level === 'итог' ? 'font-weight:700' : (r.level === 'группа' ? 'font-weight:600' : (r.level === 'в т.ч.' ? 'font-style:italic;color:#8a8d93' : ''));
+      const pad = r.level === 'позиция' || r.level === 'в т.ч.' ? 'padding-left:10px' : '';
+      return `<tr style="${st}"><td style="${pad}">${r.name}</td><td class="num">${sbRub(r.factRub)}</td>${done(r.doneRub)}${dlt(r.dAppgRub)}</tr>`;
+    }).join('');
+    const L = sb.leaders || {};
+    const lead = (arr, cell) => (arr || []).map((x, i) => `<tr><td>${i + 1}. ${x.name}</td>${cell(x.value)}</tr>`).join('');
+    const has = a => a && a.length;
+    return `
+      ${sb.period ? `<p class="date" style="margin:-4px 0 12px">${sb.period}</p>` : ''}
+      <div class="kpi-grid">${kpiCards}</div>
+      ${sb.note ? `<p class="kpi-note" style="margin:-4px 0 12px">${sb.note}</p>` : ''}
+      ${has(pos) ? `
+      <div class="card"><p class="section-title">Выполнение плана по позициям, ₽, %</p>
+        <div class="chart-wrap" style="height:${Math.max(240, pos.length * 24)}px"><canvas id="sbDoneChart"></canvas></div></div>
+      <div class="card"><p class="section-title">План и факт по позициям, ₽ с НДС</p>
+        <div class="chart-wrap" style="height:${Math.max(280, pos.length * 34)}px"><canvas id="sbPlanChart"></canvas></div></div>
+      <div class="card"><p class="section-title">Факт и АППГ по позициям, ₽ с НДС</p>
+        <div class="chart-wrap" style="height:${Math.max(280, pos.length * 34)}px"><canvas id="sbAppgChart"></canvas></div></div>` : ''}
+      ${has(sb.groups) ? `<div class="card"><p class="section-title">Структура реализации по группам, ₽</p>
+        <div class="chart-wrap" style="height:230px"><canvas id="sbGroupsChart"></canvas></div></div>` : ''}
+      ${has(L.planBest) || has(L.planWorst) ? acc('Выполнение плана — лучшие и отстающие',
+        `<table class="groups"><thead><tr><th>Лучшее выполнение</th><th>%</th></tr></thead><tbody>${lead(L.planBest, done)}</tbody></table>
+         <table class="groups" style="margin-top:10px"><thead><tr><th>Самое низкое выполнение</th><th>%</th></tr></thead><tbody>${lead(L.planWorst, done)}</tbody></table>`) : ''}
+      ${has(L.appgUp) || has(L.appgDown) ? acc('Динамика к АППГ — рост и снижение',
+        `<table class="groups"><thead><tr><th>Наибольший рост</th><th>Δ</th></tr></thead><tbody>${lead(L.appgUp, dlt)}</tbody></table>
+         <table class="groups" style="margin-top:10px"><thead><tr><th>Наибольшее снижение</th><th>Δ</th></tr></thead><tbody>${lead(L.appgDown, dlt)}</tbody></table>`) : ''}
+      ${rows ? acc('По группам и позициям', `<table class="groups"><thead><tr><th>Наименование</th><th>Факт, ₽</th><th>План</th><th>к АППГ</th></tr></thead><tbody>${rows}</tbody></table>`) : ''}
+    `;
+  }
 
-    const shEl = document.getElementById('ftsShortagesChart');
-    if (shEl && fts.shortages && fts.shortages.length) {
-      if (typeof Chart === 'undefined') {
-        shEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
-      } else {
-        new Chart(shEl, {
-          type: 'bar',
-          data: {
-            labels: fts.shortages.map(s => s.name),
-            datasets: [{
-              data: fts.shortages.map(s => s.sum),
-              backgroundColor: fts.shortages.map(s => s.sum >= 0 ? '#22a854' : '#d24b3a'),
-              borderRadius: 4
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
-              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
-            }
-          }
-        });
-      }
-    }
+  function drawSbytCharts(sb) {
+    if (typeof Chart === 'undefined') return;
+    const pos = (sb.positions || []).filter(p => p.planRub || p.factRub || p.appgRub);
+    const fmt = v => Math.abs(v) >= 1e6 ? String(Math.round(v / 1e5) / 10).replace('.', ',') + ' млн' : String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const mk = (id, cfg) => { const el = document.getElementById(id); if (el) new Chart(el, cfg); };
+    const legend = { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } };
+    const scales = pct => ({
+      x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => pct ? v + '%' : fmt(v) }, grid: { color: '#eceef1' } },
+      y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } });
+    const withPlan = pos.filter(p => p.doneRub !== null);
+    mk('sbDoneChart', { type: 'bar', data: { labels: withPlan.map(p => p.name), datasets: [
+      { data: withPlan.map(p => p.doneRub), backgroundColor: withPlan.map(p => p.doneRub < 100 ? '#e5484d' : '#30a46c'), borderRadius: 3 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: c => String(c.raw).replace('.', ',') + '% плана' } } }, scales: scales(true) } });
+    mk('sbPlanChart', { type: 'bar', data: { labels: pos.map(p => p.name), datasets: [
+      { label: 'План', data: pos.map(p => p.planRub), backgroundColor: '#c7c9cf', borderRadius: 3 },
+      { label: 'Факт', data: pos.map(p => p.factRub), backgroundColor: '#3a6df0', borderRadius: 3 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: scales(false) } });
+    mk('sbAppgChart', { type: 'bar', data: { labels: pos.map(p => p.name), datasets: [
+      { label: 'АППГ', data: pos.map(p => p.appgRub), backgroundColor: '#c7c9cf', borderRadius: 3 },
+      { label: '2026', data: pos.map(p => p.factRub), backgroundColor: '#3a6df0', borderRadius: 3 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: scales(false) } });
+    const g = sb.groups || [];
+    mk('sbGroupsChart', { type: 'doughnut', data: { labels: g.map(x => x.name + ' — ' + sbPct(x.share)), datasets: [
+      { data: g.map(x => x.factRub), backgroundColor: ['#3a6df0', '#f0a23a', '#30a46c', '#8e6cf0', '#e5484d'], borderWidth: 0 } ] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '58%', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#5a6270' } } } } });
   }
 
   // Реализация мероприятий по оптимизации затрат — по отделам (все отделы, не только ФЭО).
