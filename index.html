@@ -1280,12 +1280,13 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>`;
     }).join('');
 
-    const breadChangeHasData = (mkt.breadChangeChart || []).some(c => c.pct != null);
     const conversionHasData = mkt.conversionChart && mkt.conversionChart.shops && mkt.conversionChart.shops.some(s => s.week1 != null || s.week2 != null);
     const retailHasData = (mkt.retailChangeChart || []).some(c => c.pct != null);
     const noveltiesHasData = (mkt.noveltiesChart || []).length > 0;
     const gisHasData = mkt.reviews2gisChart && mkt.reviews2gisChart.metrics && mkt.reviews2gisChart.metrics.length > 0;
     const socSkidkiHasData = mkt.socSkidkiChart && mkt.socSkidkiChart.total != null;
+    const socW = (mkt.socSkidkiChart && mkt.socSkidkiChart.weekLabels) || [];
+    const akbHasData = (mkt.noveltiesChart || []).some(c => c.akb1 != null || c.akb2 != null);
 
     return `
       ${mkt.period ? `<p class="date" style="margin:-4px 0 12px">${mkt.period}</p>` : ''}
@@ -1293,10 +1294,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
       ${socSkidkiHasData ? `
         <div class="card">
-          <p class="section-title">Соц. скидки — количество чеков за неделю</p>
-          <div class="kpi-value" style="font-size:24px">${mkt.socSkidkiChart.total}</div>
-          ${mkt.socSkidkiChart.pct != null ? `<span class="badge ${mkt.socSkidkiChart.pct >= 0 ? 'good' : 'bad'}">${mkt.socSkidkiChart.pct >= 0 ? '+' : ''}${mkt.socSkidkiChart.pct}% к пред. неделе</span>` : `<span class="badge nodata">нет данных за пред. неделю</span>`}
+          <p class="section-title">Соц. скидки — чеки по магазинам${socW[0] || socW[1] ? ` (${socW[0] || 'пред.'} → ${socW[1] || 'тек.'})` : ''}</p>
+          ${(mkt.socSkidkiChart.shops || []).length ? `<div class="chart-wrap" style="height:${Math.max(220, mkt.socSkidkiChart.shops.length * 34)}px"><canvas id="mktSocSkidkiChart"></canvas></div>` : ''}
         </div>
+        ${(mkt.socSkidkiChart.shops || []).length ? `
+        <div class="card acc">
+          <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')"><span>Соц. скидки — таблица по магазинам</span><span class="acc-chev">›</span></p>
+          <div class="acc-body">
+            <table class="groups"><thead><tr><th>Магазин</th><th>Пред.</th><th>Тек.</th><th>Δ</th><th>Скидка, ₽</th></tr></thead><tbody>
+            ${mkt.socSkidkiChart.shops.map(x => `<tr><td>${x.name}</td><td class="num">${x.prev ?? '—'}</td><td class="num">${x.cur ?? '—'}</td>
+              <td class="num" style="font-weight:600;color:${x.pct == null ? '#8a8d93' : (x.pct >= 0 ? '#30a46c' : '#e5484d')}">${x.pct == null ? '—' : (x.pct > 0 ? '+' : '') + String(x.pct).replace('.', ',') + '%'}</td>
+              <td class="num">${x.sum == null ? '—' : String(x.sum).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}</td></tr>`).join('')}
+            <tr style="font-weight:700"><td>Итого</td><td class="num">${mkt.socSkidkiChart.prevTotal ?? '—'}</td><td class="num">${mkt.socSkidkiChart.total ?? '—'}</td>
+              <td class="num" style="color:${mkt.socSkidkiChart.pct == null ? '#8a8d93' : (mkt.socSkidkiChart.pct >= 0 ? '#30a46c' : '#e5484d')}">${mkt.socSkidkiChart.pct == null ? '—' : (mkt.socSkidkiChart.pct > 0 ? '+' : '') + String(mkt.socSkidkiChart.pct).replace('.', ',') + '%'}</td><td></td></tr>
+            </tbody></table>
+          </div>
+        </div>` : ''}
       ` : ''}
 
       ${conversionHasData ? `
@@ -1306,12 +1319,6 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
       ` : ''}
 
-      ${breadChangeHasData ? `
-      <div class="card">
-        <p class="section-title">Батон нарезной — изменение показателей за неделю, %</p>
-        <div class="chart-wrap"><canvas id="mktBreadChangeChart"></canvas></div>
-      </div>
-      ` : ''}
 
       ${retailHasData ? `
       <div class="card">
@@ -1324,6 +1331,13 @@ document.addEventListener('DOMContentLoaded', function () {
       <div class="card">
         <p class="section-title">Новинки — доля рынка, %</p>
         <div class="chart-wrap"><canvas id="mktNoveltiesChart"></canvas></div>
+      </div>
+      ` : ''}
+
+      ${akbHasData ? `
+      <div class="card">
+        <p class="section-title">Новинки — АКБ без ФТС, точек (неделя к неделе)</p>
+        <div class="chart-wrap"><canvas id="mktAkbChart"></canvas></div>
       </div>
       ` : ''}
 
@@ -1457,6 +1471,38 @@ document.addEventListener('DOMContentLoaded', function () {
           }
         });
       }
+    }
+
+    // Соц. скидки — чеки по магазинам: пред. и тек. неделя
+    const socEl = document.getElementById('mktSocSkidkiChart');
+    if (socEl && typeof Chart !== 'undefined' && mkt.socSkidkiChart && (mkt.socSkidkiChart.shops || []).length) {
+      const sh = mkt.socSkidkiChart.shops, w = mkt.socSkidkiChart.weekLabels || [];
+      new Chart(socEl, {
+        type: 'bar',
+        data: { labels: sh.map(x => x.name), datasets: [
+          { label: w[0] || 'Пред. неделя', data: sh.map(x => x.prev), backgroundColor: '#c7c9cf', borderRadius: 3 },
+          { label: w[1] || 'Текущая неделя', data: sh.map(x => x.cur), backgroundColor: '#3a6df0', borderRadius: 3 } ] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+          scales: { x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
+                    y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } } }
+      });
+    }
+
+    // Новинки — АКБ без ФТС: пред. и тек. неделя
+    const akbEl = document.getElementById('mktAkbChart');
+    if (akbEl && typeof Chart !== 'undefined') {
+      const nv = (mkt.noveltiesChart || []);
+      new Chart(akbEl, {
+        type: 'bar',
+        data: { labels: nv.map(c => c.name), datasets: [
+          { label: 'Пред. неделя', data: nv.map(c => c.akb1), backgroundColor: '#c7c9cf', borderRadius: 4 },
+          { label: 'Текущая неделя', data: nv.map(c => c.akb2), backgroundColor: '#30a46c', borderRadius: 4 } ] },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+          scales: { x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } } } }
+      });
     }
 
     const gisEl = document.getElementById('mkt2gisChart');
