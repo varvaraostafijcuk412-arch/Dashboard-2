@@ -1282,7 +1282,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const conversionHasData = mkt.conversionChart && mkt.conversionChart.shops && mkt.conversionChart.shops.some(s => s.week1 != null || s.week2 != null);
     const retailHasData = (mkt.retailChangeChart || []).some(c => c.pct != null);
-    const noveltiesHasData = (mkt.noveltiesChart || []).length > 0;
+    const noveltiesHasData = (mkt.noveltiesChart || []).some(c => c.salesPct != null || c.revPct != null || c.akbPct != null);
+    const nvW = mkt.noveltiesWeeks || [];
+    const nvPct = x => x == null ? '—' : (x > 0 ? '+' : '') + String(x).replace('.', ',') + '%';
+    const nvCol = x => x == null ? '#8a8d93' : (x >= 0 ? '#30a46c' : '#e5484d');
+    const nvNum = x => x == null ? '—' : String(Math.round(x * 10) / 10).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     const gisHasData = mkt.reviews2gisChart && mkt.reviews2gisChart.metrics && mkt.reviews2gisChart.metrics.length > 0;
     const socSkidkiHasData = mkt.socSkidkiChart && mkt.socSkidkiChart.total != null;
     const socW = (mkt.socSkidkiChart && mkt.socSkidkiChart.weekLabels) || [];
@@ -1329,8 +1333,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
       ${noveltiesHasData ? `
       <div class="card">
-        <p class="section-title">Новинки — доля рынка, %</p>
+        <p class="section-title">Новинки — изменение к пред. неделе, %${nvW[0] && nvW[1] ? ` (${nvW[0]} → ${nvW[1]})` : ''}</p>
         <div class="chart-wrap"><canvas id="mktNoveltiesChart"></canvas></div>
+      </div>
+      <div class="card acc">
+        <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')"><span>Новинки — продажи, выручка, АКБ (таблица)</span><span class="acc-chev">›</span></p>
+        <div class="acc-body">
+          <table class="groups"><thead><tr><th>Продукт</th><th>Продажи, шт</th><th>Δ</th><th>Выручка, тыс. ₽</th><th>Δ</th><th>АКБ без ФТС</th><th>Δ</th></tr></thead><tbody>
+          ${mkt.noveltiesChart.map(x => `<tr><td>${x.name}</td>
+            <td class="num">${nvNum(x.sales1)} → ${nvNum(x.sales2)}</td><td class="num" style="font-weight:600;color:${nvCol(x.salesPct)}">${nvPct(x.salesPct)}</td>
+            <td class="num">${nvNum(x.rev1)} → ${nvNum(x.rev2)}</td><td class="num" style="font-weight:600;color:${nvCol(x.revPct)}">${nvPct(x.revPct)}</td>
+            <td class="num">${nvNum(x.akb1)} → ${nvNum(x.akb2)}</td><td class="num" style="font-weight:600;color:${nvCol(x.akbPct)}">${nvPct(x.akbPct)}</td></tr>`).join('')}
+          </tbody></table>
+        </div>
       </div>
       ` : ''}
 
@@ -1451,22 +1466,27 @@ document.addEventListener('DOMContentLoaded', function () {
       if (typeof Chart === 'undefined') {
         novEl.parentElement.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">График временно недоступен (не загрузилась библиотека)</div>';
       } else {
+        const nv = mkt.noveltiesChart;
         new Chart(novEl, {
           type: 'bar',
           data: {
-            labels: mkt.noveltiesChart.map(c => c.name),
+            labels: nv.map(c => c.name),
             datasets: [
-              { label: 'Пред. неделя', data: mkt.noveltiesChart.map(c => c.share1), backgroundColor: '#c7c9cf', borderRadius: 4 },
-              { label: 'Текущая неделя', data: mkt.noveltiesChart.map(c => c.share2), backgroundColor: '#3a6df0', borderRadius: 4 }
+              { label: 'Продажи, шт', data: nv.map(c => c.salesPct), backgroundColor: '#3a6df0', borderRadius: 4 },
+              { label: 'Выручка', data: nv.map(c => c.revPct), backgroundColor: '#8b6cf0', borderRadius: 4 },
+              { label: 'АКБ без ФТС', data: nv.map(c => c.akbPct), backgroundColor: '#30a46c', borderRadius: 4 }
             ]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } } },
+            plugins: {
+              legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } },
+              tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y == null ? '—' : (ctx.parsed.y > 0 ? '+' : '') + String(ctx.parsed.y).replace('.', ',') + '%') } }
+            },
             scales: {
               x: { ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } },
-              y: { ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } }
+              y: { ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => v + '%' }, grid: { color: '#eceef1' } }
             }
           }
         });
