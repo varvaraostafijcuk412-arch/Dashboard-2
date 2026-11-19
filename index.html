@@ -116,6 +116,7 @@
  
   table.groups{ width:100%; border-collapse:collapse; font-size:12.5px; }
   table.groups th{ text-align:left; color:var(--dim); font-weight:600; font-size:11px; padding:0 6px 8px 0; }
+  table.groups th.num{ text-align:right; }
   table.groups td{ padding:8px 6px 8px 0; border-top:1px solid var(--line); }
   table.groups td.num{ text-align:right; font-variant-numeric:tabular-nums; }
   .pct-good{ color:var(--good-fg); font-weight:700; }
@@ -1305,7 +1306,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="card acc">
           <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')"><span>Соц. скидки — таблица по магазинам</span><span class="acc-chev">›</span></p>
           <div class="acc-body">
-            <table class="groups"><thead><tr><th>Магазин</th><th>Пред.</th><th>Тек.</th><th>Δ</th><th>Скидка, ₽</th></tr></thead><tbody>
+            <table class="groups"><thead><tr><th>Магазин</th><th class="num">Пред.</th><th class="num">Тек.</th><th class="num">Δ</th><th class="num">Скидка, ₽</th></tr></thead><tbody>
             ${mkt.socSkidkiChart.shops.map(x => `<tr><td>${x.name}</td><td class="num">${x.prev ?? '—'}</td><td class="num">${x.cur ?? '—'}</td>
               <td class="num" style="font-weight:600;color:${x.pct == null ? '#8a8d93' : (x.pct >= 0 ? '#30a46c' : '#e5484d')}">${x.pct == null ? '—' : (x.pct > 0 ? '+' : '') + String(x.pct).replace('.', ',') + '%'}</td>
               <td class="num">${x.sum == null ? '—' : String(x.sum).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}</td></tr>`).join('')}
@@ -1339,7 +1340,7 @@ document.addEventListener('DOMContentLoaded', function () {
       <div class="card acc">
         <p class="section-title acc-title" onclick="this.closest('.acc').classList.toggle('open')"><span>Новинки — продажи, выручка, АКБ (таблица)</span><span class="acc-chev">›</span></p>
         <div class="acc-body">
-          <table class="groups"><thead><tr><th>Продукт</th><th>Продажи, шт</th><th>Δ</th><th>Выручка, тыс. ₽</th><th>Δ</th><th>АКБ без ФТС</th><th>Δ</th></tr></thead><tbody>
+          <table class="groups"><thead><tr><th>Продукт</th><th class="num">Продажи, шт</th><th class="num">Δ</th><th class="num">Выручка, тыс. ₽</th><th class="num">Δ</th><th class="num">АКБ без ФТС</th><th class="num">Δ</th></tr></thead><tbody>
           ${mkt.noveltiesChart.map(x => `<tr><td>${x.name}</td>
             <td class="num">${nvNum(x.sales1)} → ${nvNum(x.sales2)}</td><td class="num" style="font-weight:600;color:${nvCol(x.salesPct)}">${nvPct(x.salesPct)}</td>
             <td class="num">${nvNum(x.rev1)} → ${nvNum(x.rev2)}</td><td class="num" style="font-weight:600;color:${nvCol(x.revPct)}">${nvPct(x.revPct)}</td>
@@ -1660,7 +1661,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const rows = (sb.rows || []).map(r => {
       const st = r.level === 'итог' ? 'font-weight:700' : (r.level === 'группа' ? 'font-weight:600' : (r.level === 'в т.ч.' ? 'font-style:italic;color:#8a8d93' : ''));
       const pad = r.level === 'позиция' || r.level === 'в т.ч.' ? 'padding-left:10px' : '';
-      return `<tr style="${st}"><td style="${pad}">${r.name}</td><td class="num">${sbRub(r.factRub)}</td>${done(r.doneRub)}${dlt(r.dAppgRub)}</tr>`;
+      return `<tr style="${st}"><td style="${pad}">${r.name}</td><td class="num">${sbRub(r.factKg)}</td>${done(r.doneKg)}${dlt(r.dAppgKg)}</tr>`;
     }).join('');
     const L = sb.leaders || {};
     const lead = (arr, cell) => (arr || []).map((x, i) => `<tr><td>${i + 1}. ${x.name}</td>${cell(x.value)}</tr>`).join('');
@@ -1679,12 +1680,12 @@ document.addEventListener('DOMContentLoaded', function () {
       ${has(grp) ? `<div class="card"><p class="section-title">Структура реализации по группам, кг</p>
         <div class="chart-wrap" style="height:230px"><canvas id="sbGroupsChart"></canvas></div></div>` : ''}
       ${has(L.planBest) || has(L.planWorst) ? acc('Выполнение плана — лучшие и отстающие',
-        `<table class="groups"><thead><tr><th>Лучшее выполнение</th><th>%</th></tr></thead><tbody>${lead(L.planBest, done)}</tbody></table>
-         <table class="groups" style="margin-top:10px"><thead><tr><th>Самое низкое выполнение</th><th>%</th></tr></thead><tbody>${lead(L.planWorst, done)}</tbody></table>`) : ''}
+        `<table class="groups"><thead><tr><th>Лучшее выполнение</th><th class="num">%</th></tr></thead><tbody>${lead(L.planBest, done)}</tbody></table>
+         <table class="groups" style="margin-top:10px"><thead><tr><th>Самое низкое выполнение</th><th class="num">%</th></tr></thead><tbody>${lead(L.planWorst, done)}</tbody></table>`) : ''}
       ${has(L.appgUp) || has(L.appgDown) ? acc('Динамика к АППГ — рост и снижение',
-        `<table class="groups"><thead><tr><th>Наибольший рост</th><th>Δ</th></tr></thead><tbody>${lead(L.appgUp, dlt)}</tbody></table>
-         <table class="groups" style="margin-top:10px"><thead><tr><th>Наибольшее снижение</th><th>Δ</th></tr></thead><tbody>${lead(L.appgDown, dlt)}</tbody></table>`) : ''}
-      ${rows ? acc('По группам и позициям', `<table class="groups"><thead><tr><th>Наименование</th><th>Факт, ₽</th><th>План</th><th>к АППГ</th></tr></thead><tbody>${rows}</tbody></table>`) : ''}
+        `<table class="groups"><thead><tr><th>Наибольший рост</th><th class="num">Δ</th></tr></thead><tbody>${lead(L.appgUp, dlt)}</tbody></table>
+         <table class="groups" style="margin-top:10px"><thead><tr><th>Наибольшее снижение</th><th class="num">Δ</th></tr></thead><tbody>${lead(L.appgDown, dlt)}</tbody></table>`) : ''}
+      ${rows ? acc('По группам и позициям', `<table class="groups"><thead><tr><th>Наименование</th><th class="num">Факт, кг</th><th class="num">План</th><th class="num">к АППГ</th></tr></thead><tbody>${rows}</tbody></table>`) : ''}
     `;
   }
 
