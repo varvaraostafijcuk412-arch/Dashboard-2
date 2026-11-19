@@ -1629,6 +1629,12 @@ document.addEventListener('DOMContentLoaded', function () {
   /* ---------------- СБЫТ — показывает то, что на дашборде таблицы «Сбыт» ---------------- */
   function sbPct(x) { return x === null || x === undefined ? '—' : String(x).replace('.', ',') + '%'; }
   function sbRub(x) { return x === null || x === undefined ? '—' : String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  // Группы верхнего уровня (1., 2., 4. …) с долей в общем весе реализации — для диаграммы структуры
+  function sbGroupsKg(sb) {
+    const tot = sb.total && sb.total.factKg;
+    return (sb.rows || []).filter(r => r.level === 'группа' && /^\d+\.$/.test(r.code) && r.factKg)
+      .map(r => ({ name: r.name, factKg: r.factKg, share: tot ? Math.round(r.factKg / tot * 1000) / 10 : null }));
+  }
   function renderSbyt(sb) {
     if (!sb || sb.error) return `<div class="empty-dept">Таблица сбыта недоступна${sb && sb.error ? '<br><small>' + sb.error + '</small>' : ''}</div>`;
     const kpiCards = (sb.kpis || []).map(kp => {
@@ -1649,7 +1655,8 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>`;
     const done = x => `<td class="num" style="color:${x === null || x === undefined ? '#8a8d93' : (x < 100 ? '#e5484d' : '#30a46c')};font-weight:600">${sbPct(x)}</td>`;
     const dlt = x => `<td class="num" style="color:${ftsColor(x)};font-weight:600">${ftsPct(x)}</td>`;
-    const pos = (sb.positions || []).filter(p => p.planRub || p.factRub || p.appgRub);
+    const pos = (sb.positions || []).filter(p => p.planKg || p.factKg || p.appgKg);
+    const grp = sbGroupsKg(sb);
     const rows = (sb.rows || []).map(r => {
       const st = r.level === 'итог' ? 'font-weight:700' : (r.level === 'группа' ? 'font-weight:600' : (r.level === 'в т.ч.' ? 'font-style:italic;color:#8a8d93' : ''));
       const pad = r.level === 'позиция' || r.level === 'в т.ч.' ? 'padding-left:10px' : '';
@@ -1663,13 +1670,13 @@ document.addEventListener('DOMContentLoaded', function () {
       <div class="kpi-grid">${kpiCards}</div>
       ${sb.note ? `<p class="kpi-note" style="margin:-4px 0 12px">${sb.note}</p>` : ''}
       ${has(pos) ? `
-      <div class="card"><p class="section-title">Выполнение плана по позициям, ₽, %</p>
+      <div class="card"><p class="section-title">Выполнение плана по позициям (по весу), %</p>
         <div class="chart-wrap" style="height:${Math.max(240, pos.length * 24)}px"><canvas id="sbDoneChart"></canvas></div></div>
-      <div class="card"><p class="section-title">План и факт по позициям, ₽ с НДС</p>
+      <div class="card"><p class="section-title">План и факт по позициям, кг</p>
         <div class="chart-wrap" style="height:${Math.max(280, pos.length * 34)}px"><canvas id="sbPlanChart"></canvas></div></div>
-      <div class="card"><p class="section-title">Факт и АППГ по позициям, ₽ с НДС</p>
+      <div class="card"><p class="section-title">Факт и АППГ по позициям, кг</p>
         <div class="chart-wrap" style="height:${Math.max(280, pos.length * 34)}px"><canvas id="sbAppgChart"></canvas></div></div>` : ''}
-      ${has(sb.groups) ? `<div class="card"><p class="section-title">Структура реализации по группам, ₽</p>
+      ${has(grp) ? `<div class="card"><p class="section-title">Структура реализации по группам, кг</p>
         <div class="chart-wrap" style="height:230px"><canvas id="sbGroupsChart"></canvas></div></div>` : ''}
       ${has(L.planBest) || has(L.planWorst) ? acc('Выполнение плана — лучшие и отстающие',
         `<table class="groups"><thead><tr><th>Лучшее выполнение</th><th>%</th></tr></thead><tbody>${lead(L.planBest, done)}</tbody></table>
@@ -1683,30 +1690,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function drawSbytCharts(sb) {
     if (typeof Chart === 'undefined') return;
-    const pos = (sb.positions || []).filter(p => p.planRub || p.factRub || p.appgRub);
-    const fmt = v => Math.abs(v) >= 1e6 ? String(Math.round(v / 1e5) / 10).replace('.', ',') + ' млн' : String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const pos = (sb.positions || []).filter(p => p.planKg || p.factKg || p.appgKg);
+    const fmt = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const kgTip = { callbacks: { label: c => c.dataset.label + ': ' + fmt(c.raw) + ' кг' } };
     const mk = (id, cfg) => { const el = document.getElementById(id); if (el) new Chart(el, cfg); };
     const legend = { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#8a8d93' } };
     const scales = pct => ({
       x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => pct ? v + '%' : fmt(v) }, grid: { color: '#eceef1' } },
       y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } });
-    const withPlan = pos.filter(p => p.doneRub !== null);
+    const withPlan = pos.filter(p => p.doneKg !== null);
     mk('sbDoneChart', { type: 'bar', data: { labels: withPlan.map(p => p.name), datasets: [
-      { data: withPlan.map(p => p.doneRub), backgroundColor: withPlan.map(p => p.doneRub < 100 ? '#e5484d' : '#30a46c'), borderRadius: 3 } ] },
+      { data: withPlan.map(p => p.doneKg), backgroundColor: withPlan.map(p => p.doneKg < 100 ? '#e5484d' : '#30a46c'), borderRadius: 3 } ] },
       options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false },
         tooltip: { callbacks: { label: c => String(c.raw).replace('.', ',') + '% плана' } } }, scales: scales(true) } });
     mk('sbPlanChart', { type: 'bar', data: { labels: pos.map(p => p.name), datasets: [
-      { label: 'План', data: pos.map(p => p.planRub), backgroundColor: '#c7c9cf', borderRadius: 3 },
-      { label: 'Факт', data: pos.map(p => p.factRub), backgroundColor: '#3a6df0', borderRadius: 3 } ] },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: scales(false) } });
+      { label: 'План', data: pos.map(p => p.planKg), backgroundColor: '#c7c9cf', borderRadius: 3 },
+      { label: 'Факт', data: pos.map(p => p.factKg), backgroundColor: '#3a6df0', borderRadius: 3 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend, tooltip: kgTip }, scales: scales(false) } });
     mk('sbAppgChart', { type: 'bar', data: { labels: pos.map(p => p.name), datasets: [
-      { label: 'АППГ', data: pos.map(p => p.appgRub), backgroundColor: '#c7c9cf', borderRadius: 3 },
-      { label: '2026', data: pos.map(p => p.factRub), backgroundColor: '#3a6df0', borderRadius: 3 } ] },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: scales(false) } });
-    const g = sb.groups || [];
+      { label: 'АППГ', data: pos.map(p => p.appgKg), backgroundColor: '#c7c9cf', borderRadius: 3 },
+      { label: '2026', data: pos.map(p => p.factKg), backgroundColor: '#3a6df0', borderRadius: 3 } ] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend, tooltip: kgTip }, scales: scales(false) } });
+    const g = sbGroupsKg(sb);
     mk('sbGroupsChart', { type: 'doughnut', data: { labels: g.map(x => x.name + ' — ' + sbPct(x.share)), datasets: [
-      { data: g.map(x => x.factRub), backgroundColor: ['#3a6df0', '#f0a23a', '#30a46c', '#8e6cf0', '#e5484d'], borderWidth: 0 } ] },
-      options: { responsive: true, maintainAspectRatio: false, cutout: '58%', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#5a6270' } } } } });
+      { data: g.map(x => x.factKg), backgroundColor: ['#3a6df0', '#f0a23a', '#30a46c', '#8e6cf0', '#e5484d'], borderWidth: 0 } ] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '58%', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 9, font: { size: 10 }, color: '#5a6270' } }, tooltip: { callbacks: { label: c => ' ' + fmt(c.raw) + ' кг' } } } } });
   }
 
   // Реализация мероприятий по оптимизации затрат — по отделам (все отделы, не только ФЭО).
@@ -2314,19 +2322,19 @@ document.addEventListener('DOMContentLoaded', function () {
       ${o.compareNote ? `<p class="kpi-note" style="margin:-4px 0 12px">${o.compareNote}</p>` : ''}
       ${has(o.daily, x => x.gpu || x.ye) ? `
       <div class="card"><p class="section-title">Потребление по дням, кВтч</p>
-        <div class="chart-wrap" style="height:270px"><canvas id="ogeDailyChart"></canvas></div></div>` : ''}
+        <div class="chart-wrap"><canvas id="ogeDailyChart"></canvas></div></div>` : ''}
       ${has(o.units, u => u.kwh) ? `
       <div class="card"><p class="section-title">Выработка по станциям за период, кВтч</p>
-        <div class="chart-wrap" style="height:${Math.max(220, (o.units || []).length * 36 + 40)}px"><canvas id="ogeUnitsChart"></canvas></div></div>` : ''}
+        <div class="chart-wrap"><canvas id="ogeUnitsChart"></canvas></div></div>` : ''}
       ${has(o.share, x => x.kwh) ? `
       <div class="card"><p class="section-title">Доля ГПУ и Якутскэнерго за период</p>
-        <div class="chart-wrap" style="height:270px"><canvas id="ogeShareChart"></canvas></div>
+        <div class="chart-wrap"><canvas id="ogeShareChart"></canvas></div>
         ${shareNotes ? `<p class="kpi-note" style="margin-top:8px">${shareNotes}</p>` : ''}</div>` : ''}
       ${has(o.months, m => m.gpu || m.ye) ? `
       <div class="card"><p class="section-title">По месяцам за год, кВтч</p>
-        <div class="chart-wrap" style="height:280px"><canvas id="ogeMonthsChart"></canvas></div></div>
+        <div class="chart-wrap"><canvas id="ogeMonthsChart"></canvas></div></div>
       <div class="card"><p class="section-title">Доля ГПУ и Якутскэнерго по месяцам, %</p>
-        <div class="chart-wrap" style="height:260px"><canvas id="ogeMonthShareChart"></canvas></div></div>` : ''}
+        <div class="chart-wrap"><canvas id="ogeMonthShareChart"></canvas></div></div>` : ''}
       ${unitRows ? acc('Выработка по станциям', table(['Станция', 'кВтч'], unitRows)) : ''}
       ${monthRows ? acc('По месяцам за год', table(['Месяц', 'ГПУ', 'Якутскэнерго', 'Доля ГПУ'], monthRows)) : ''}
     `;
@@ -2339,7 +2347,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const fmt = v => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     const sc = (stacked, pct, horizontal) => {
       const val = { stacked: !!stacked, beginAtZero: true, max: pct ? 100 : undefined, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => pct ? v + '%' : fmt(v) }, grid: { color: '#eceef1' } };
-      const cat = { stacked: !!stacked, ticks: { color: '#8a8d93', font: { size: 9 }, maxRotation: horizontal ? 0 : 60, autoSkip: !horizontal, maxTicksLimit: 12 }, grid: { display: false } };
+      const cat = { stacked: !!stacked, ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } };
       return horizontal ? { x: val, y: cat } : { x: cat, y: val };
     };
     const mk = (id, cfg) => { const el = document.getElementById(id); if (el) new Chart(el, cfg); };
