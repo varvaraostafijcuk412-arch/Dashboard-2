@@ -2314,19 +2314,19 @@ document.addEventListener('DOMContentLoaded', function () {
       ${o.compareNote ? `<p class="kpi-note" style="margin:-4px 0 12px">${o.compareNote}</p>` : ''}
       ${has(o.daily, x => x.gpu || x.ye) ? `
       <div class="card"><p class="section-title">Потребление по дням, кВтч</p>
-        <div class="chart-wrap"><canvas id="ogeDailyChart"></canvas></div></div>` : ''}
+        <div class="chart-wrap" style="height:270px"><canvas id="ogeDailyChart"></canvas></div></div>` : ''}
       ${has(o.units, u => u.kwh) ? `
       <div class="card"><p class="section-title">Выработка по станциям за период, кВтч</p>
-        <div class="chart-wrap"><canvas id="ogeUnitsChart"></canvas></div></div>` : ''}
+        <div class="chart-wrap" style="height:${Math.max(220, (o.units || []).length * 36 + 40)}px"><canvas id="ogeUnitsChart"></canvas></div></div>` : ''}
       ${has(o.share, x => x.kwh) ? `
       <div class="card"><p class="section-title">Доля ГПУ и Якутскэнерго за период</p>
-        <div class="chart-wrap"><canvas id="ogeShareChart"></canvas></div>
+        <div class="chart-wrap" style="height:270px"><canvas id="ogeShareChart"></canvas></div>
         ${shareNotes ? `<p class="kpi-note" style="margin-top:8px">${shareNotes}</p>` : ''}</div>` : ''}
       ${has(o.months, m => m.gpu || m.ye) ? `
       <div class="card"><p class="section-title">По месяцам за год, кВтч</p>
-        <div class="chart-wrap"><canvas id="ogeMonthsChart"></canvas></div></div>
+        <div class="chart-wrap" style="height:280px"><canvas id="ogeMonthsChart"></canvas></div></div>
       <div class="card"><p class="section-title">Доля ГПУ и Якутскэнерго по месяцам, %</p>
-        <div class="chart-wrap"><canvas id="ogeMonthShareChart"></canvas></div></div>` : ''}
+        <div class="chart-wrap" style="height:260px"><canvas id="ogeMonthShareChart"></canvas></div></div>` : ''}
       ${unitRows ? acc('Выработка по станциям', table(['Станция', 'кВтч'], unitRows)) : ''}
       ${monthRows ? acc('По месяцам за год', table(['Месяц', 'ГПУ', 'Якутскэнерго', 'Доля ГПУ'], monthRows)) : ''}
     `;
@@ -2339,7 +2339,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const fmt = v => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     const sc = (stacked, pct, horizontal) => {
       const val = { stacked: !!stacked, beginAtZero: true, max: pct ? 100 : undefined, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => pct ? v + '%' : fmt(v) }, grid: { color: '#eceef1' } };
-      const cat = { stacked: !!stacked, ticks: { color: '#8a8d93', font: { size: 9 } }, grid: { display: false } };
+      const cat = { stacked: !!stacked, ticks: { color: '#8a8d93', font: { size: 9 }, maxRotation: horizontal ? 0 : 60, autoSkip: !horizontal, maxTicksLimit: 12 }, grid: { display: false } };
       return horizontal ? { x: val, y: cat } : { x: cat, y: val };
     };
     const mk = (id, cfg) => { const el = document.getElementById(id); if (el) new Chart(el, cfg); };
