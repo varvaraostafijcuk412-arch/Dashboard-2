@@ -1291,6 +1291,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const gisHasData = mkt.reviews2gisChart && mkt.reviews2gisChart.metrics && mkt.reviews2gisChart.metrics.length > 0;
     const socSkidkiHasData = mkt.socSkidkiChart && mkt.socSkidkiChart.total != null;
     const socW = (mkt.socSkidkiChart && mkt.socSkidkiChart.weekLabels) || [];
+    const socShare = (mkt.socSkidkiChart && mkt.socSkidkiChart.share) || {};
+    const pc = x => x == null ? '—' : String(x).replace('.', ',') + '%';
+    const pp = x => x == null ? '—' : (x > 0 ? '+' : '') + String(x).replace('.', ',') + ' п.п.';
     const akbHasData = (mkt.noveltiesChart || []).some(c => c.akb1 != null || c.akb2 != null);
 
     return `
@@ -1300,6 +1303,10 @@ document.addEventListener('DOMContentLoaded', function () {
       ${socSkidkiHasData ? `
         <div class="card">
           <p class="section-title">Соц. скидки — чеки по магазинам${socW[0] || socW[1] ? ` (${socW[0] || 'пред.'} → ${socW[1] || 'тек.'})` : ''}</p>
+          ${socShare.cur != null ? `<div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin:0 0 12px">
+            <span style="font-size:30px;font-weight:700;line-height:1">${pc(socShare.cur)}</span>
+            <span style="font-size:12px;color:var(--dim)">чеков со скидкой от всех чеков · пред. ${pc(socShare.prev)} · ${pp(socShare.delta)}<br>${nvNum(socShare.discChecksCur)} из ${nvNum(socShare.allChecksCur)} чеков (все магазины)</span>
+          </div>` : `<p style="font-size:12px;color:var(--dim);margin:0 0 10px">Доля чеков со скидкой появится, когда на листе «Данные» заполнено «Всего чеков, шт (все магазины)» (колонка AX).</p>`}
           ${(mkt.socSkidkiChart.shops || []).length ? `<div class="chart-wrap" style="height:${Math.max(220, mkt.socSkidkiChart.shops.length * 34)}px"><canvas id="mktSocSkidkiChart"></canvas></div>` : ''}
         </div>
         ${(mkt.socSkidkiChart.shops || []).length ? `
