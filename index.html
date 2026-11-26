@@ -1294,6 +1294,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const socShare = (mkt.socSkidkiChart && mkt.socSkidkiChart.share) || {};
     const pc = x => x == null ? '—' : String(x).replace('.', ',') + '%';
     const pp = x => x == null ? '—' : (x > 0 ? '+' : '') + String(x).replace('.', ',') + ' п.п.';
+    const emp = mkt.employeeDiscount;
+    const empHasData = !!(emp && emp.mozaikaChecks && emp.mozaikaChecks.cur != null);
+    const empW = (emp && emp.weekLabels) || [];
+    const empN = x => x == null ? '—' : String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     const akbHasData = (mkt.noveltiesChart || []).some(c => c.akb1 != null || c.akb2 != null);
 
     return `
@@ -1323,6 +1327,20 @@ document.addEventListener('DOMContentLoaded', function () {
           </div>
         </div>` : ''}
       ` : ''}
+
+      ${empHasData ? `
+      <div class="card">
+        <p class="section-title">Скидка сотрудников (Мозаика)${empW[0] || empW[1] ? ` (${empW[0] || 'пред.'} → ${empW[1] || 'тек.'})` : ''}</p>
+        <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin:0 0 12px">
+          <span style="font-size:30px;font-weight:700;line-height:1">${pc(emp.share.cur)}</span>
+          <span style="font-size:12px;color:var(--dim)">чеков Мозаики со скидкой сотрудников · пред. ${pc(emp.share.prev)} · ${pp(emp.share.delta)}</span>
+        </div>
+        <table class="groups"><thead><tr><th>Показатель</th><th class="num">Пред.</th><th class="num">Тек.</th></tr></thead><tbody>
+          <tr><td>Чеков Мозаики</td><td class="num">${empN(emp.mozaikaChecks.prev)}</td><td class="num">${empN(emp.mozaikaChecks.cur)}</td></tr>
+          <tr><td>Чеков со скидкой сотрудников</td><td class="num">${empN(emp.checks.prev)}</td><td class="num">${empN(emp.checks.cur)}</td></tr>
+          <tr><td>Сумма скидки, ₽</td><td class="num">${empN(emp.sum.prev)}</td><td class="num">${empN(emp.sum.cur)}</td></tr>
+        </tbody></table>
+      </div>` : ''}
 
       ${conversionHasData ? `
       <div class="card">
@@ -2218,15 +2236,16 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>`;
     const table = (head, rows) => `<table class="groups"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
 
-    const shopRows = (q.shops || []).filter(s => s.share !== null).map(s => `
-      <tr><td>${s.name}</td><td class="num">${qFmt(s.kg, 1)}</td><td class="num">${qFmt(s.share, 2)}%</td>
-      <td class="num">${qDelta(s.dPp, 2, '')}</td><td class="num">${s.target !== null ? qFmt(s.target, 2) + '%' : ''}</td></tr>`).join('');
+    const shopRows = (q.shops || []).filter(s => s.kg !== null && s.kg !== undefined).map(s => `
+      <tr><td>${s.name}</td><td class="num">${qFmt(s.kg, 1)}</td><td class="num">${qFmt(s.prevKg, 1)}</td>
+      <td class="num">${qDelta(s.dKg, 1, '')}</td><td class="num">${qDelta(s.devPrev, 0, '%')}</td></tr>`).join('');
     const topRows = (q.top || []).map((t, i) => `
       <tr><td>${i + 1}. ${t.reason}<br><span class="kpi-note">${t.shop}, ${t.kind}</span></td><td class="num">${qFmt(t.kg, 1)}</td>
       <td class="num">${t.sharePct !== null ? t.sharePct + '%' : ''}</td><td class="num">${qDelta(t.devPrev, 0, '%')}</td></tr>`).join('');
-    const brigRows = (q.brigades || []).filter(b => b.share !== null).map(b => `
+    const brigList = (q.brigades || []).filter(b => b.zamKg !== null && b.zamKg !== undefined).slice().sort((a, b) => b.zamKg - a.zamKg);
+    const brigRows = brigList.map(b => `
       <tr><td>${b.name}<br><span class="kpi-note">${b.shop}</span></td><td class="num">${qFmt(b.zamKg, 1)}</td>
-      <td class="num">${qFmt(b.share, 2)}%</td><td class="num">${qDelta(b.dPp, 2, '')}</td><td class="num">${b.ball ?? ''}</td></tr>`).join('');
+      <td class="num">${qFmt(b.prevZamKg, 1)}</td><td class="num">${qDelta(b.dKg, 1, '')}</td><td class="num">${qFmt(b.brakKg, 1)}</td></tr>`).join('');
     const defRows = (q.deformation || []).map(x => `
       <tr${x.name === 'ИТОГО' ? ' style="font-weight:600"' : ''}><td>${x.name}</td><td class="num">${qFmt(x.kg, 1)}</td>
       <td class="num">${qFmt(x.prevKg, 1)}</td><td class="num">${qDelta(x.d, 1, '')}</td></tr>`).join('');
@@ -2242,7 +2261,7 @@ document.addEventListener('DOMContentLoaded', function () {
       <div class="kpi-grid">${kpiCards}</div>
 
       ${has(mw, d => d.hcBrak !== null || d.hcZam !== null || d.msZam !== null) ? `
-      <div class="card"><p class="section-title">Доля брака и замечаний по неделям${mon}, %</p>
+      <div class="card"><p class="section-title">Брак и замечания по неделям${mon}, кг</p>
         <div class="chart-wrap"><canvas id="kachDynChart"></canvas></div></div>` : ''}
       ${has(mw, d => d.defKg) ? `
       <div class="card"><p class="section-title">Деформация по неделям${mon}, кг</p>
@@ -2251,15 +2270,15 @@ document.addEventListener('DOMContentLoaded', function () {
       <div class="card"><p class="section-title">Жалобы по неделям${mon}, шт</p>
         <div class="chart-wrap"><canvas id="kachComplChart"></canvas></div></div>` : ''}
       ${shopRows ? `
-      <div class="card"><p class="section-title">Доля по цехам: этот и прошлый период, %</p>
+      <div class="card"><p class="section-title">Брак и замечания по цехам: этот и прошлый период, кг</p>
         <div class="chart-wrap" style="height:300px"><canvas id="kachShopsChart"></canvas></div></div>` : ''}
-      ${has(q.brigades, b => b.share !== null) ? `
-      <div class="card"><p class="section-title">Доля замечаний по бригадам, %</p>
+      ${brigRows ? `
+      <div class="card"><p class="section-title">Замечания по бригадам, кг</p>
         <div class="chart-wrap"><canvas id="kachBrigChart"></canvas></div></div>` : ''}
 
-      ${shopRows ? acc('Брак и замечания по цехам', table(['Цех — показатель', 'кг', 'Доля', 'Δ п.п.', 'Цель'], shopRows)) : ''}
+      ${shopRows ? acc('Брак и замечания по цехам', table(['Цех — показатель', 'кг', 'Прошл.', 'Δ кг', 'Δ %'], shopRows)) : ''}
       ${topRows ? acc('Топ-5 причин за период', table(['Причина', 'кг', 'Доля', 'Откл.'], topRows)) : ''}
-      ${brigRows ? acc('Бригады — замечания', table(['Бригада', 'кг', 'Доля', 'Δ п.п.', 'Балл'], brigRows)) : ''}
+      ${brigRows ? acc('Бригады — замечания', table(['Бригада', 'Замеч., кг', 'Прошл.', 'Δ кг', 'Брак, кг'], brigRows)) : ''}
       ${defRows ? acc('Деформация', table(['Где', 'кг', 'Прошл.', 'Δ'], defRows)) : ''}
       ${complRows ? acc('Жалобы по видам', table(['Вид', 'Период', 'Прошл.', 'Месяц'], complRows)) : ''}
     `;
@@ -2278,19 +2297,19 @@ document.addEventListener('DOMContentLoaded', function () {
       { label: 'ХЦ: брак', data: dyn.map(d => d.hcBrak), borderColor: '#e5484d', backgroundColor: '#e5484d', tension: 0.3, spanGaps: true },
       { label: 'ХЦ: замечания', data: dyn.map(d => d.hcZam), borderColor: '#f5a524', backgroundColor: '#f5a524', tension: 0.3, spanGaps: true },
       { label: 'МШ: замечания', data: dyn.map(d => d.msZam), borderColor: '#3a6df0', backgroundColor: '#3a6df0', tension: 0.3, spanGaps: true } ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: axis(true) } });
-    const shops = (q.shops || []).filter(s => s.share !== null && !/в т\.ч\./.test(s.name));
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: axis(false) } });
+    const shops = (q.shops || []).filter(s => s.kg !== null && s.kg !== undefined && !/в т\.ч\./.test(s.name));
     mk('kachShopsChart', { type: 'bar', data: { labels: shops.map(s => s.name), datasets: [
-      { label: 'Прошлый период', data: shops.map(s => s.prevShare), backgroundColor: '#c7c9cf', borderRadius: 4 },
-      { label: 'Этот период', data: shops.map(s => s.share), backgroundColor: '#3a6df0', borderRadius: 4 } ] },
+      { label: 'Прошлый период', data: shops.map(s => s.prevKg), backgroundColor: '#c7c9cf', borderRadius: 4 },
+      { label: 'Этот период', data: shops.map(s => s.kg), backgroundColor: '#3a6df0', borderRadius: 4 } ] },
       options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend },
-        scales: { x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 }, callback: v => String(v).replace('.', ',') + '%' }, grid: { color: '#eceef1' } },
+        scales: { x: { beginAtZero: true, ticks: { color: '#8a8d93', font: { size: 10 } }, grid: { color: '#eceef1' } },
                   y: { ticks: { color: '#5a6270', font: { size: 10 } }, grid: { display: false } } } } });
-    const br = (q.brigades || []).filter(b => b.share !== null);
+    const br = (q.brigades || []).filter(b => b.zamKg !== null && b.zamKg !== undefined).slice().sort((a, b) => b.zamKg - a.zamKg);
     mk('kachBrigChart', { type: 'bar', data: { labels: br.map(b => b.name), datasets: [
-      { label: 'Прошлый период', data: br.map(b => b.prevShare), backgroundColor: '#c7c9cf', borderRadius: 4 },
-      { label: 'Этот период', data: br.map(b => b.share), backgroundColor: '#3a6df0', borderRadius: 4 } ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: axis(true) } });
+      { label: 'Прошлый период', data: br.map(b => b.prevZamKg), backgroundColor: '#c7c9cf', borderRadius: 4 },
+      { label: 'Этот период', data: br.map(b => b.zamKg), backgroundColor: '#3a6df0', borderRadius: 4 } ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: axis(false) } });
     mk('kachDefChart', { type: 'bar', data: { labels: dyn.map(d => d.period), datasets: [
       { label: 'Деформация, кг', data: dyn.map(d => d.defKg), backgroundColor: '#f5a524', borderRadius: 4 } ] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: axis(false) } });
